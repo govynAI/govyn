@@ -13,11 +13,11 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **PRXY-02**: Proxy transparently forwards HTTP requests to Anthropic API with correct request/response format
 - [x] **PRXY-03**: Proxy forwards requests to user-configured custom OpenAI-compatible endpoints
 - [x] **PRXY-04**: Proxy supports versioned URL routing: /v1/openai/*, /v1/anthropic/*, /v1/custom/:name/*
-- [ ] **PRXY-05**: Proxy streams SSE responses chunk-by-chunk without buffering entire response
-- [ ] **PRXY-06**: Streaming response starts within 50ms of real API first token
-- [ ] **PRXY-07**: Health check endpoint returns 200 with version and uptime
-- [ ] **PRXY-08**: Configuration loaded from YAML file for proxy settings, API targets, agent definitions
-- [ ] **PRXY-09**: Upstream 429 responses forwarded to agent with original rate limit headers preserved
+- [x] **PRXY-05**: Proxy streams SSE responses chunk-by-chunk without buffering entire response
+- [x] **PRXY-06**: Streaming response starts within 50ms of real API first token
+- [x] **PRXY-07**: Health check endpoint returns 200 with version and uptime
+- [x] **PRXY-08**: Configuration loaded from YAML file for proxy settings, API targets, agent definitions
+- [x] **PRXY-09**: Upstream 429 responses forwarded to agent with original rate limit headers preserved
 - [x] **PRXY-10**: Proxy adds <50ms p95 latency overhead
 
 ### Agent Identification & Cost Tracking
@@ -217,11 +217,11 @@ Requirements for initial release. Each maps to roadmap phases.
 | PRXY-02 | Phase 1 | Complete |
 | PRXY-03 | Phase 1 | Complete |
 | PRXY-04 | Phase 1 | Complete |
-| PRXY-05 | Phase 1 | Pending |
-| PRXY-06 | Phase 1 | Pending |
-| PRXY-07 | Phase 1 | Pending |
-| PRXY-08 | Phase 1 | Pending |
-| PRXY-09 | Phase 1 | Pending |
+| PRXY-05 | Phase 1 | Complete |
+| PRXY-06 | Phase 1 | Complete |
+| PRXY-07 | Phase 1 | Complete |
+| PRXY-08 | Phase 1 | Complete |
+| PRXY-09 | Phase 1 | Complete |
 | PRXY-10 | Phase 1 | Complete |
 | COST-01 | Phase 2 | Pending |
 | COST-02 | Phase 2 | Pending |

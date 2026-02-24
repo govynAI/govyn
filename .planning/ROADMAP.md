@@ -66,11 +66,11 @@ Govyn is an API proxy that sits between AI agents and every tool/API they call, 
   3. A streaming response begins forwarding chunks to the caller within 50ms of the real API returning its first token
   4. The health endpoint at /health returns 200 with version and uptime
   5. Upstream 429 errors are forwarded to the agent with original rate-limit headers preserved intact
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: Monorepo setup, TypeScript, HTTP proxy server with versioned routing
-- [ ] 01-02: SSE streaming passthrough, YAML config loader, health endpoint, 429 handling
+- [ ] 01-01-PLAN.md — Monorepo setup, TypeScript, HTTP proxy server with versioned routing (PRXY-01, PRXY-02, PRXY-03, PRXY-04, PRXY-10)
+- [ ] 01-02-PLAN.md — SSE streaming passthrough, YAML config loader, health endpoint, 429 handling (PRXY-05, PRXY-06, PRXY-07, PRXY-08, PRXY-09)
 
 ---
 
@@ -408,7 +408,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Proxy Server Foundation | M1: Core Proxy MVP | 0/2 | Not started | - |
+| 1. Proxy Server Foundation | M1: Core Proxy MVP | 0/2 | Planned | - |
 | 2. Agent Identification & Cost Tracking | M1: Core Proxy MVP | 0/2 | Not started | - |
 | 3. Budget Enforcement & Loop Detection | M1: Core Proxy MVP | 0/2 | Not started | - |
 | 4. Action Logging | M1: Core Proxy MVP | 0/2 | Not started | - |

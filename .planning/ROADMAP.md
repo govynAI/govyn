@@ -103,11 +103,11 @@ Plans:
   3. Soft limit requests are forwarded but a warning event is emitted
   4. Budget status for any agent is queryable via API
   5. Budget limits are resettable: daily at midnight UTC, monthly at month start
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: Budget config, enforcement middleware, hard/soft limit behavior, budget status API
-- [ ] 03-02: Loop detection, auto-kill with configurable cooldown, budget reset logic
+- [ ] 03-01-PLAN.md — Budget types, config parsing, BudgetEnforcer class, enforcement middleware, budget status API (BUDG-01, BUDG-02, BUDG-03, BUDG-07)
+- [ ] 03-02-PLAN.md — Loop detection, auto-kill with configurable cooldown, manual unblock API, budget reset logic (BUDG-04, BUDG-05, BUDG-06)
 
 ---
 

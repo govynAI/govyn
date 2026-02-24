@@ -17,7 +17,8 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

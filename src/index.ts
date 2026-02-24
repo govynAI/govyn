@@ -1,22 +1,21 @@
 /**
  * Entry point for the Govyn proxy server.
  *
- * Uses a hardcoded default configuration for now.
- * YAML config loading is added in Plan 01-02.
+ * Loads configuration from govyn.config.yaml (or --config <path> CLI flag),
+ * then starts the HTTP proxy server.
  */
 
 import { startServer } from './server.js';
-import { openaiProvider } from './providers/openai.js';
-import { anthropicProvider } from './providers/anthropic.js';
-import type { ProxyConfig } from './types.js';
+import { loadConfig } from './config.js';
 
-const config: ProxyConfig = {
-  port: parseInt(process.env['PORT'] ?? '4000', 10),
-  host: process.env['HOST'] ?? '0.0.0.0',
-  providers: new Map([
-    ['openai', openaiProvider],
-    ['anthropic', anthropicProvider],
-  ]),
-};
+// Support --config <path> CLI flag
+const configPath = process.argv.find((a, i) => process.argv[i - 1] === '--config');
 
-startServer(config);
+try {
+  const config = loadConfig(configPath);
+  startServer(config);
+} catch (err) {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(`[govyn] Failed to start: ${message}`);
+  process.exit(1);
+}

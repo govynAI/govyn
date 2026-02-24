@@ -69,8 +69,8 @@ Govyn is an API proxy that sits between AI agents and every tool/API they call, 
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Monorepo setup, TypeScript, HTTP proxy server with versioned routing (PRXY-01, PRXY-02, PRXY-03, PRXY-04, PRXY-10)
-- [ ] 01-02-PLAN.md — SSE streaming passthrough, YAML config loader, health endpoint, 429 handling (PRXY-05, PRXY-06, PRXY-07, PRXY-08, PRXY-09)
+- [x] 01-01-PLAN.md — Monorepo setup, TypeScript, HTTP proxy server with versioned routing (PRXY-01, PRXY-02, PRXY-03, PRXY-04, PRXY-10)
+- [x] 01-02-PLAN.md — SSE streaming passthrough, YAML config loader, health endpoint, 429 handling (PRXY-05, PRXY-06, PRXY-07, PRXY-08, PRXY-09)
 
 ---
 
@@ -84,11 +84,11 @@ Plans:
   2. Cost calculated for 100 test requests is within 5% of provider billing for OpenAI and Anthropic models
   3. The cost summary API endpoint returns correct per-agent and per-period breakdowns
   4. Requests using unknown models are logged with a warning and the cost is marked as "unpriced"
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Agent identification (header + scoped API key), token counting (OpenAI + Anthropic)
-- [ ] 02-02: Cost calculation engine, pricing table, in-memory aggregator, cost summary API
+- [ ] 02-01-PLAN.md — Agent identification (header + API key scoping), token extraction (OpenAI + Anthropic), pricing table and cost calculator (COST-01, COST-02, COST-03, COST-04, COST-07, COST-08)
+- [ ] 02-02-PLAN.md — In-memory cost aggregator, cost summary API endpoint, pipeline integration wiring (COST-05, COST-06, COST-08)
 
 ---
 

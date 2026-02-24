@@ -87,7 +87,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Agent identification (header + API key scoping), token extraction (OpenAI + Anthropic), pricing table and cost calculator (COST-01, COST-02, COST-03, COST-04, COST-07, COST-08)
+- [x] 02-01-PLAN.md — Agent identification (header + API key scoping), token extraction (OpenAI + Anthropic), pricing table and cost calculator (COST-01, COST-02, COST-03, COST-04, COST-07, COST-08)
 - [ ] 02-02-PLAN.md — In-memory cost aggregator, cost summary API endpoint, pipeline integration wiring (COST-05, COST-06, COST-08)
 
 ---
@@ -409,7 +409,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. Proxy Server Foundation | 2/2 | Complete   | 2026-02-24 | - |
-| 2. Agent Identification & Cost Tracking | M1: Core Proxy MVP | 0/2 | Not started | - |
+| 2. Agent Identification & Cost Tracking | M1: Core Proxy MVP | 1/2 | In progress | - |
 | 3. Budget Enforcement & Loop Detection | M1: Core Proxy MVP | 0/2 | Not started | - |
 | 4. Action Logging | M1: Core Proxy MVP | 0/2 | Not started | - |
 | 5. Packaging, Testing & Deployment | M1: Core Proxy MVP | 0/3 | Not started | - |

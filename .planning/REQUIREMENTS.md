@@ -22,14 +22,14 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Agent Identification & Cost Tracking
 
-- [ ] **COST-01**: Agents identified via X-Govyn-Agent header or scoped API keys
-- [ ] **COST-02**: Per-request token counting (input/output) for OpenAI models from response usage field
-- [ ] **COST-03**: Per-request token counting (input/output) for Anthropic models from response usage field
-- [ ] **COST-04**: Real-time cost calculation using configurable model pricing table
+- [x] **COST-01**: Agents identified via X-Govyn-Agent header or scoped API keys
+- [x] **COST-02**: Per-request token counting (input/output) for OpenAI models from response usage field
+- [x] **COST-03**: Per-request token counting (input/output) for Anthropic models from response usage field
+- [x] **COST-04**: Real-time cost calculation using configurable model pricing table
 - [ ] **COST-05**: In-memory cost aggregation by agent, model, and time period (hour/day/month rolling windows)
 - [ ] **COST-06**: Cost summary API endpoint with agent and period filtering
-- [ ] **COST-07**: Unknown models logged with warning, cost marked as "unpriced"
-- [ ] **COST-08**: Cost calculated within 5% accuracy of provider billing
+- [x] **COST-07**: Unknown models logged with warning, cost marked as "unpriced"
+- [x] **COST-08**: Cost calculated within 5% accuracy of provider billing
 
 ### Budget Enforcement & Loop Detection
 
@@ -223,14 +223,14 @@ Requirements for initial release. Each maps to roadmap phases.
 | PRXY-08 | Phase 1 | Complete |
 | PRXY-09 | Phase 1 | Complete |
 | PRXY-10 | Phase 1 | Complete |
-| COST-01 | Phase 2 | Pending |
-| COST-02 | Phase 2 | Pending |
-| COST-03 | Phase 2 | Pending |
-| COST-04 | Phase 2 | Pending |
+| COST-01 | Phase 2 | Complete |
+| COST-02 | Phase 2 | Complete |
+| COST-03 | Phase 2 | Complete |
+| COST-04 | Phase 2 | Complete |
 | COST-05 | Phase 2 | Pending |
 | COST-06 | Phase 2 | Pending |
-| COST-07 | Phase 2 | Pending |
-| COST-08 | Phase 2 | Pending |
+| COST-07 | Phase 2 | Complete |
+| COST-08 | Phase 2 | Complete |
 | BUDG-01 | Phase 3 | Pending |
 | BUDG-02 | Phase 3 | Pending |
 | BUDG-03 | Phase 3 | Pending |

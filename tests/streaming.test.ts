@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as http from 'node:http';
 import { startServer } from '../src/server.js';
+import { CostAggregator } from '../src/cost-aggregator.js';
 import type { ProxyConfig } from '../src/types.js';
 
 // Ports for this test suite
@@ -71,8 +72,10 @@ beforeAll(async () => {
         },
       ],
     ]),
+    agents: new Map(),
+    pricing: new Map(),
   };
-  proxyServer = startServer(config);
+  proxyServer = startServer(config, new CostAggregator());
   await waitForListen(proxyServer);
 });
 

@@ -8,6 +8,7 @@
  *   (Retry-After, x-ratelimit-*) — per ADR-016: 429s are passed through, not retried
  * - Delegates SSE responses to handleStreamingResponse for chunk-by-chunk piping
  * - Returns 502 only for proxy-own errors (upstream unreachable, connection timeout)
+ * - After each response completes, extracts tokens and records cost (non-blocking)
  */
 
 import * as http from 'node:http';
@@ -18,6 +19,10 @@ import { mapOpenAIHeaders } from './providers/openai.js';
 import { mapAnthropicHeaders } from './providers/anthropic.js';
 import { mapCustomHeaders } from './providers/custom.js';
 import { handleStreamingResponse } from './streaming.js';
+import { extractTokenUsage, extractTokenUsageFromSSE } from './tokens.js';
+import { calculateCost } from './pricing.js';
+import type { PricingTable } from './pricing.js';
+import { CostAggregator } from './cost-aggregator.js';
 
 /**
  * Select the appropriate header mapping function based on provider type.
@@ -76,11 +81,22 @@ function sendErrorResponse(
  * - For upstream errors (4xx, 5xx): forwards status code + headers + body verbatim
  * - For proxy errors (upstream unreachable, timeout): returns 502 with Govyn error format
  * - Logs time from request start to first upstream byte
+ * - After response completes, extracts token usage and records cost (non-blocking)
+ *
+ * @param req - The incoming client request
+ * @param res - The outgoing client response
+ * @param routeMatch - The matched route (provider, path, type)
+ * @param agentId - The resolved agent identifier for this request
+ * @param pricingTable - Pricing table for cost calculation
+ * @param aggregator - Cost aggregator to record results
  */
 export async function forwardRequest(
   req: IncomingMessage,
   res: ServerResponse,
   routeMatch: RouteMatch,
+  agentId: string,
+  pricingTable: PricingTable,
+  aggregator: CostAggregator,
 ): Promise<void> {
   const requestStart = Date.now();
   const { provider, upstreamPath } = routeMatch;
@@ -165,9 +181,41 @@ export async function forwardRequest(
       const isSSE = contentType.includes('text/event-stream');
 
       if (isSSE) {
+        // Accumulate SSE chunks for token extraction (concurrent with piping to client)
+        const sseChunks: string[] = [];
+        upstreamRes.on('data', (chunk: Buffer) => {
+          sseChunks.push(chunk.toString('utf8'));
+        });
+
         // Delegate to streaming handler — sets its own headers (content-type, cache-control, connection)
         // and pipes chunks without buffering
         handleStreamingResponse(upstreamRes, res, statusCode);
+
+        // After the stream ends, extract tokens and record cost
+        // (happens after all data has been piped to client)
+        upstreamRes.on('end', () => {
+          const usage = extractTokenUsageFromSSE(sseChunks, routeMatch.providerType);
+          if (usage) {
+            const cost = calculateCost(usage, pricingTable);
+            aggregator.recordCost({
+              agentId,
+              model: usage.model,
+              provider: routeMatch.providerType,
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              inputCost: cost.inputCost,
+              outputCost: cost.outputCost,
+              totalCost: cost.totalCost,
+              priced: cost.priced,
+              timestamp: Date.now(),
+            });
+            const totalTokens = usage.inputTokens + usage.outputTokens;
+            console.log(
+              `[govyn] Cost: agent=${agentId} model=${usage.model} tokens=${totalTokens} cost=$${cost.totalCost.toFixed(6)} priced=${cost.priced}`,
+            );
+          }
+        });
+
         // Resolve when the pipe ends (client close or upstream end)
         res.on('finish', resolve);
         res.on('close', resolve);
@@ -177,7 +225,38 @@ export async function forwardRequest(
         res.writeHead(statusCode, responseHeaders);
         upstreamRes.pipe(res);
 
-        upstreamRes.on('end', resolve);
+        // Accumulate body for token extraction (concurrent with piping to client)
+        const responseBodyChunks: Buffer[] = [];
+        upstreamRes.on('data', (chunk: Buffer) => {
+          responseBodyChunks.push(chunk);
+        });
+
+        upstreamRes.on('end', () => {
+          // Extract tokens from the buffered response body
+          const responseBody = Buffer.concat(responseBodyChunks).toString('utf8');
+          const usage = extractTokenUsage(responseBody, routeMatch.providerType);
+          if (usage) {
+            const cost = calculateCost(usage, pricingTable);
+            aggregator.recordCost({
+              agentId,
+              model: usage.model,
+              provider: routeMatch.providerType,
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              inputCost: cost.inputCost,
+              outputCost: cost.outputCost,
+              totalCost: cost.totalCost,
+              priced: cost.priced,
+              timestamp: Date.now(),
+            });
+            const totalTokens = usage.inputTokens + usage.outputTokens;
+            console.log(
+              `[govyn] Cost: agent=${agentId} model=${usage.model} tokens=${totalTokens} cost=$${cost.totalCost.toFixed(6)} priced=${cost.priced}`,
+            );
+          }
+          resolve();
+        });
+
         upstreamRes.on('error', (err) => {
           console.error('[proxy] upstream response error:', err.message);
           if (!res.writableEnded) {

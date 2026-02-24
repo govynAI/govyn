@@ -2,18 +2,27 @@
  * Entry point for the Govyn proxy server.
  *
  * Loads configuration from govyn.config.yaml (or --config <path> CLI flag),
- * then starts the HTTP proxy server.
+ * creates the cost aggregator, then starts the HTTP proxy server.
  */
 
 import { startServer } from './server.js';
 import { loadConfig } from './config.js';
+import { CostAggregator } from './cost-aggregator.js';
 
 // Support --config <path> CLI flag
 const configPath = process.argv.find((a, i) => process.argv[i - 1] === '--config');
 
 try {
   const config = loadConfig(configPath);
-  startServer(config);
+
+  // Create shared cost aggregator (in-memory for Phase 2)
+  const aggregator = new CostAggregator();
+
+  // Log how many model prices are loaded
+  const pricingSize = config.pricing.size;
+  console.log(`[govyn] Cost tracking enabled with ${pricingSize} model prices`);
+
+  startServer(config, aggregator);
 } catch (err) {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`[govyn] Failed to start: ${message}`);

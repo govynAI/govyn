@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as http from 'node:http';
 import { startServer } from '../src/server.js';
+import { CostAggregator } from '../src/cost-aggregator.js';
 import type { ProxyConfig, ProviderConfig } from '../src/types.js';
 
 /**
@@ -106,8 +107,10 @@ function createTestProxy(providers: Map<string, ProviderConfig>): Promise<{
       port: 0,
       host: '127.0.0.1',
       providers,
+      agents: new Map(),
+      pricing: new Map(),
     };
-    const server = startServer(config);
+    const server = startServer(config, new CostAggregator());
     // startServer calls server.listen — wait for it
     server.on('listening', () => {
       const addr = server.address() as { port: number };

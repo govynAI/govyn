@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as http from 'node:http';
 import { startServer } from '../src/server.js';
+import { CostAggregator } from '../src/cost-aggregator.js';
 import type { ProxyConfig } from '../src/types.js';
 
 /** Make an HTTP GET request and return status + parsed JSON body. */
@@ -37,12 +38,14 @@ const testConfig: ProxyConfig = {
   port: TEST_PORT,
   host: '127.0.0.1',
   providers: new Map(),
+  agents: new Map(),
+  pricing: new Map(),
 };
 
 let server: http.Server;
 
 beforeAll(async () => {
-  server = startServer(testConfig);
+  server = startServer(testConfig, new CostAggregator());
   // Wait until the server is actually listening
   await new Promise<void>((resolve) => {
     if (server.listening) { resolve(); return; }

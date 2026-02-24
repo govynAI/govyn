@@ -70,6 +70,64 @@ export interface TokenUsage {
 }
 
 /**
+ * A single cost record for one proxied request.
+ * Stored in the CostAggregator after every proxied request.
+ */
+export interface CostRecord {
+  /** The agent that made the request */
+  agentId: string;
+  /** The model used (as returned by the upstream) */
+  model: string;
+  /** The provider type */
+  provider: ProviderType;
+  /** Number of input tokens */
+  inputTokens: number;
+  /** Number of output tokens */
+  outputTokens: number;
+  /** Cost for input tokens (USD) */
+  inputCost: number;
+  /** Cost for output tokens (USD) */
+  outputCost: number;
+  /** Total cost (USD) */
+  totalCost: number;
+  /** Whether the model was found in the pricing table */
+  priced: boolean;
+  /** Unix timestamp (ms) when the record was created */
+  timestamp: number;
+}
+
+/**
+ * Aggregated cost summary for a single agent over a time period.
+ */
+export interface CostSummary {
+  /** The agent identifier */
+  agentId: string;
+  /** Total cost (USD) */
+  totalCost: number;
+  /** Total input token cost (USD) */
+  inputCost: number;
+  /** Total output token cost (USD) */
+  outputCost: number;
+  /** Total input tokens across all requests */
+  totalInputTokens: number;
+  /** Total output tokens across all requests */
+  totalOutputTokens: number;
+  /** Number of requests attributed to this agent */
+  requestCount: number;
+  /** Per-model cost and token breakdown */
+  models: Record<string, { cost: number; requests: number; inputTokens: number; outputTokens: number }>;
+}
+
+/**
+ * Time period for cost aggregation queries.
+ * - 'hour': last 60 minutes
+ * - 'day': current calendar day (midnight UTC to now)
+ * - 'month': current calendar month (1st UTC to now)
+ * - 'all': all records
+ */
+export type TimePeriod = 'hour' | 'day' | 'month' | 'all';
+
+/**
  * Overall proxy server configuration.
  */
 export interface ProxyConfig {

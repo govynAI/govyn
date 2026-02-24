@@ -26,8 +26,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **COST-02**: Per-request token counting (input/output) for OpenAI models from response usage field
 - [x] **COST-03**: Per-request token counting (input/output) for Anthropic models from response usage field
 - [x] **COST-04**: Real-time cost calculation using configurable model pricing table
-- [ ] **COST-05**: In-memory cost aggregation by agent, model, and time period (hour/day/month rolling windows)
-- [ ] **COST-06**: Cost summary API endpoint with agent and period filtering
+- [x] **COST-05**: In-memory cost aggregation by agent, model, and time period (hour/day/month rolling windows)
+- [x] **COST-06**: Cost summary API endpoint with agent and period filtering
 - [x] **COST-07**: Unknown models logged with warning, cost marked as "unpriced"
 - [x] **COST-08**: Cost calculated within 5% accuracy of provider billing
 
@@ -227,8 +227,8 @@ Requirements for initial release. Each maps to roadmap phases.
 | COST-02 | Phase 2 | Complete |
 | COST-03 | Phase 2 | Complete |
 | COST-04 | Phase 2 | Complete |
-| COST-05 | Phase 2 | Pending |
-| COST-06 | Phase 2 | Pending |
+| COST-05 | Phase 2 | Complete |
+| COST-06 | Phase 2 | Complete |
 | COST-07 | Phase 2 | Complete |
 | COST-08 | Phase 2 | Complete |
 | BUDG-01 | Phase 3 | Pending |

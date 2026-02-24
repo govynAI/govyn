@@ -5,33 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** Agents never hold real API keys. The proxy holds credentials and enforces governance at the infrastructure level — not the prompt level.
-**Current focus:** Phase 2 in progress — Plan 01 complete
+**Current focus:** Phase 2 complete — ready for Phase 3
 
 ## Current Position
 
-Phase: 2 of 18 (Agent Identification and Cost Tracking) — IN PROGRESS
-Plan: 1 of 2 in current phase — COMPLETE
-Status: Phase 2 Plan 01 complete
-Last activity: 2026-02-24 — Completed plan 02-01 (agent identification, token extraction, pricing engine)
+Phase: 2 of 18 (Agent Identification and Cost Tracking) — COMPLETE
+Plan: 2 of 2 in current phase — COMPLETE
+Status: Phase 2 all plans complete
+Last activity: 2026-02-24 — Completed plan 02-02 (cost aggregator, cost API, proxy pipeline wiring)
 
-Progress: [██░░░░░░░░] 9%
+Progress: [███░░░░░░░] 11%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: 5 min
-- Total execution time: 0.22 hours
+- Total execution time: 0.34 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-proxy-server-foundation | 2/2 | 11 min | 6 min |
-| 02-agent-identification-cost-tracking | 1/2 | 4 min | 4 min |
+| 02-agent-identification-cost-tracking | 2/2 | 11 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (7 min), 01-02 (4 min), 02-01 (4 min)
+- Last 5 plans: 01-01 (7 min), 01-02 (4 min), 02-01 (4 min), 02-02 (7 min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -57,6 +57,9 @@ Recent decisions affecting current work:
 - 02-01: Pricing table uses built-in defaults with config overrides — reduces setup friction
 - 02-01: Unknown models get priced=false and zero cost with console.warn (not throw) — fail-open for cost per ADR-002
 - 02-01: Token extraction returns null (not throws) on malformed input — proxy never crashes on bad upstream response
+- [Phase 02]: Non-blocking cost recording: cost is recorded after response delivery via stream end event — zero latency impact on client
+- [Phase 02]: startServer() accepts CostAggregator explicitly via dependency injection — no global state, single shared aggregator
+- [Phase 02]: Flat record array with query-time filter for cost aggregation — simpler than pre-bucketed windows, sufficient for Phase 2 in-memory scale
 
 ### Pending Todos
 
@@ -69,5 +72,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 02-01-PLAN.md — agent identification, token extraction, pricing engine (39 new tests, 85 total passing)
+Stopped at: Completed 02-02-PLAN.md — cost aggregator, cost API endpoint, full proxy pipeline with cost tracking (28 new tests, 113 total passing)
 Resume file: None

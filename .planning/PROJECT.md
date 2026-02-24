@@ -1,0 +1,101 @@
+# Govyn
+
+## What This Is
+
+An API proxy that sits between AI agents and every tool/API they call, enforcing policies, tracking costs, logging actions, and enabling replay — so agents physically cannot bypass governance rules. Open-source proxy core with a SaaS dashboard for teams deploying AI agents in production.
+
+## Core Value
+
+Agents never hold real API keys. The proxy holds credentials and enforces governance at the infrastructure level — not the prompt level. If the proxy blocks an action, the agent has no alternative path to the real API.
+
+## Requirements
+
+### Validated
+
+(None yet — ship to validate)
+
+### Active
+
+- [ ] LLM API proxy that transparently forwards requests to OpenAI, Anthropic, and any OpenAI-compatible API
+- [ ] Streaming SSE passthrough with <50ms p95 added latency
+- [ ] Per-request token counting and real-time cost calculation across providers
+- [ ] Budget enforcement with per-agent daily/monthly hard and soft limits
+- [ ] Loop detection and auto-kill for runaway agents
+- [ ] Structured action logging (async, non-blocking) with configurable depth
+- [ ] Agent identification via X-Govyn-Agent header or scoped API keys
+- [ ] YAML configuration for proxy settings, providers, agents, budgets
+- [ ] YAML-based policy-as-code engine with block, require_approval, rate_limit, budget_limit, content_filter, time_window rules
+- [ ] In-memory policy evaluation (<5ms) with hot-reload
+- [ ] Human-in-the-loop approval queue (async pattern, HTTP 202 + polling)
+- [ ] Policy templates library (10+ pre-built scenarios)
+- [ ] React + TypeScript + Tailwind dashboard with Clerk auth
+- [ ] Cost overview, per-agent drill-down, budget status indicators
+- [ ] Policy management UI (list, editor, dry-run testing, version history)
+- [ ] Approval queue UI with approve/deny/notes
+- [ ] Alert configuration (email/webhook on budget thresholds, policy triggers)
+- [ ] Stripe billing integration (Starter $29, Team $99, Enterprise $299)
+- [ ] Session replay with step-through and comparison views
+- [ ] Anomaly detection (cost spikes, error loops, deviation alerting)
+- [ ] Python SDK and Node.js SDK (drop-in replacements for openai/anthropic clients)
+- [ ] LangChain callback handler and framework plugins
+- [ ] CLI tool (govyn init, policy management, status, replay, audit export)
+- [ ] Docker container and npm package deployment
+- [ ] Self-hosted proxy + cloud dashboard deployment model
+- [ ] Dual key mode: Key Storage (strongest enforcement) and Passthrough (lowest friction)
+- [ ] Versioned API: /v1/openai/*, /v1/anthropic/*, /v1/custom/:name/*
+- [ ] Fail-open default with configurable fail-closed mode
+- [ ] OpenTelemetry export for traces and metrics
+
+### Out of Scope
+
+- Desktop/computer-use agent governance (Simular, OpenClaw-style mouse/keyboard automation) — fundamentally different architecture, covers <5% of current agent deployments
+- Crypto/blockchain payment rails — enterprise and SMB customers want standard Stripe billing (ADR-015)
+- Native mobile apps — web dashboard first
+- Competing with Agentgateway/Solo.io on Kubernetes/MCP/A2A enterprise infrastructure — different buyer, different stack, different price point
+
+## Context
+
+**Market position:** No proxy-architecture governance product exists for non-enterprise teams. All direct competitors (AgentBudget, TealTiger, AgentGuard47, Coralogix, AgentOps) use SDK/wrapper models where real API keys remain in the agent's environment. The proxy model is architecturally unbypassable — "a wall, not a door lock."
+
+**Competitive landscape (Feb 2026):**
+- SDK competitors do cost tracking but not infrastructure-enforced governance
+- Enterprise proxy (Agentgateway) targets Fortune 500 on Kubernetes — different buyer entirely
+- Adjacent funded players (Lumia $18M, Alinia, Asteroid YC W25) focus on security/compliance, not general governance + cost + debugging
+- No single tool combines policy-as-code + cost control + session replay
+
+**Evidence of need:** Production failures from Replit (database deletion), Amazon (service outage), Anthropic (hallucinated payments), Meta (email deletion despite "ask first" rules) — all caused by agents with direct, ungoverned API access.
+
+**Distribution:** 200+ VC contacts for portfolio company outreach. Open-source launch on HN/Reddit. Framework ecosystem listings (LangChain, CrewAI docs).
+
+**Domain:** GovynAI.com. Packages: govyn on npm (published), govynai on PyPI (published, PEP 541 claim pending for govyn).
+
+## Constraints
+
+- **Architecture**: Proxy, not SDK — this is the core differentiator and non-negotiable (ADR-001)
+- **Latency**: <50ms p95 added latency, <20ms aspiration (ADR-013)
+- **Streaming**: SSE passthrough is first-class, not a bolt-on (ADR-005)
+- **Open source**: Proxy core must be fully functional without dashboard (ADR-003)
+- **Runtime**: Must run on Cloudflare Workers (cloud) and Docker/Node (self-hosted) (ADR-011)
+- **Stack**: Node.js/TypeScript proxy, React+TypeScript+Tailwind dashboard, PostgreSQL (Neon), R2/S3 logs, Clerk auth (ADR-010, ADR-012)
+- **Solo founder**: Monorepo structure, ship fast, minimize operational complexity
+
+## Key Decisions
+
+| Decision | Rationale | Outcome |
+|----------|-----------|---------|
+| Proxy architecture, not SDK | Agents physically can't bypass governance without real API keys (ADR-001) | — Pending |
+| Fail-open default | Being a SPOF is biggest adoption blocker; fail-open means our bugs don't cause customer outages (ADR-002) | — Pending |
+| Open-source proxy, SaaS dashboard | Trust through transparency; monetize via dashboard following Sentry/PostHog model (ADR-003) | — Pending |
+| Dual key mode (storage vs. passthrough) | Passthrough removes trust barrier; key storage for maximum enforcement; conversion path between them (ADR-019) | — Pending |
+| YAML policy format | Human-readable, diff-friendly, version-controllable; dashboard provides visual editor (ADR-008) | — Pending |
+| In-memory policy evaluation | <5ms on hot path; DB only for persistence and dashboard reads (ADR-006) | — Pending |
+| Async logging, never block hot path | Latency is #1 concern for proxy; losing a log entry acceptable, adding latency is not (ADR-007) | — Pending |
+| Cloudflare Workers for cloud proxy | Edge execution (300+ locations), native streaming support, minimal network hop (ADR-011) | — Pending |
+| PostgreSQL via Neon | Handles structured queries, JSONB for flexible schemas, time-series for cost aggregation (ADR-012) | — Pending |
+| Async approval queue (HTTP 202 + polling) | CF Workers can't hold connections; pattern works across all deployment models (ADR-017) | — Pending |
+| Customer holds own API keys (default) | "Give a startup my API keys" is non-starter; passthrough mode forwards without storing (ADR-004, ADR-019) | — Pending |
+| Versioned API and policy schema | Customers depend on proxy contract for production agents; breaking changes need migration path (ADR-018) | — Pending |
+| No crypto/blockchain | Enterprise/SMB want standard Stripe billing; crypto infra is early and niche (ADR-015) | — Pending |
+
+---
+*Last updated: 2026-02-24 after initialization*

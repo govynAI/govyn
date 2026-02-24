@@ -8,7 +8,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { ProxyConfig, ProviderConfig } from './types.js';
+import type { ProxyConfig, ProviderConfig, AgentConfig } from './types.js';
+import { loadPricing } from './pricing.js';
 
 /**
  * Raw shape of the YAML file on disk.
@@ -24,6 +25,8 @@ interface RawConfig {
     anthropic?: { base_url?: string; api_key_env?: string };
     custom?: Record<string, { base_url?: string; api_key_env?: string }>;
   };
+  agents?: Record<string, { api_keys?: string[] } | null>;
+  pricing?: Record<string, { input: number; output: number }>;
 }
 
 /**
@@ -113,10 +116,29 @@ export function loadConfig(filePath?: string): ProxyConfig {
     });
   }
 
+  // Parse agents section
+  const agents = new Map<string, AgentConfig>();
+  const rawAgents = cfg.agents ?? {};
+  for (const [agentName, agentDef] of Object.entries(rawAgents)) {
+    if (typeof agentName !== 'string') continue;
+    const apiKeys = agentDef?.api_keys ?? [];
+    agents.set(agentName, {
+      name: agentName,
+      apiKeys,
+    });
+  }
+
+  // Parse pricing section and build pricing table
+  const rawPricing = cfg.pricing;
+  const configPricing: Record<string, { input: number; output: number }> | undefined = rawPricing;
+  const pricing = loadPricing(configPricing);
+
   const config: ProxyConfig = {
     port: cfg.proxy.port,
     host: cfg.proxy.host ?? '0.0.0.0',
     providers,
+    agents,
+    pricing,
   };
 
   console.log(`[govyn] Loaded config from ${absolutePath}`);

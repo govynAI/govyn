@@ -34,6 +34,42 @@ export interface RouteMatch {
 }
 
 /**
+ * Configuration for a named agent that can send requests through the proxy.
+ */
+export interface AgentConfig {
+  /** Human-readable name for this agent */
+  name: string;
+  /** Optional list of API keys scoped to this agent */
+  apiKeys?: string[];
+}
+
+/**
+ * Resolved identity of the agent making a request.
+ */
+export interface AgentIdentity {
+  /** The agent's identifier (e.g. "research-agent" or "unknown") */
+  agentId: string;
+  /** How the agent was identified */
+  source: 'header' | 'api-key' | 'default';
+}
+
+/**
+ * Token usage extracted from a provider response.
+ */
+export interface TokenUsage {
+  /** Number of input/prompt tokens used */
+  inputTokens: number;
+  /** Number of output/completion tokens generated */
+  outputTokens: number;
+  /** Total tokens (input + output) */
+  totalTokens: number;
+  /** The model that was used */
+  model: string;
+  /** The provider type */
+  provider: ProviderType;
+}
+
+/**
  * Overall proxy server configuration.
  */
 export interface ProxyConfig {
@@ -43,4 +79,8 @@ export interface ProxyConfig {
   host: string;
   /** Map of provider name to provider configuration */
   providers: Map<string, ProviderConfig>;
+  /** Map of agent name to agent configuration */
+  agents: Map<string, AgentConfig>;
+  /** Pricing table for cost calculation */
+  pricing: Map<string, { inputPricePerMillion: number; outputPricePerMillion: number }>;
 }

@@ -10,6 +10,20 @@ Shipped v1.0: transparent HTTP proxy with per-agent cost tracking, budget enforc
 
 Agents never hold real API keys. The proxy holds credentials and enforces governance at the infrastructure level — not the prompt level. If the proxy blocks an action, the agent has no alternative path to the real API.
 
+## Current Milestone: v1.1 Policy Engine
+
+**Goal:** YAML-based policy-as-code engine evaluated in-memory on every proxied request — block, rate-limit, content-filter, time-window, and model-route enforcement with hot-reload and pre-built templates.
+
+**Target features:**
+- YAML policy schema with versioned format (block, rate_limit, budget_limit, content_filter, time_window, model_route)
+- Policy scoping hierarchy: global → per-agent → per-target-API, most restrictive wins
+- In-memory synchronous evaluation (<5ms for 100 policies)
+- Hot-reload: file watch, <1s pickup, no restart required
+- `govyn policy validate` CLI command with schema error reporting
+- 10+ pre-built policy templates (production-safety, budget-control, pii-protection, business-hours-only, read-only-mode, emergency-lockdown, etc.)
+- Standardized 403 error contract with policy name + reason
+- model_route policy type: rewrite model field before forwarding (ADR-021)
+
 ## Requirements
 
 ### Validated
@@ -104,4 +118,4 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 | In-memory cost aggregation with flat records | Simple query-time filtering, sufficient for single-node proxy scale | ✓ Good — works for v1.0, DB aggregation deferred to dashboard |
 
 ---
-*Last updated: 2026-02-25 after v1.0 milestone*
+*Last updated: 2026-02-25 after v1.1 milestone start*

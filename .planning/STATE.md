@@ -5,16 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Agents never hold real API keys. The proxy holds credentials and enforces governance at the infrastructure level — not the prompt level.
-**Current focus:** v1.0 shipped. Ready for next milestone planning.
+**Current focus:** v1.1 Policy Engine — defining requirements
 
 ## Current Position
 
-Phase: 5 of 18 (Packaging, Testing, Deployment) -- COMPLETE
-Plan: 4 of 4 in current phase
-Status: v1.0 Core Proxy MVP shipped. All 5 phases complete, 39/39 requirements satisfied, 337 tests passing.
-Last activity: 2026-02-25 — Milestone v1.0 archived
-
-Progress: [██████░░░░] 28% (5/18 phases)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-25 — Milestone v1.1 started
 
 ## Performance Metrics
 
@@ -52,5 +50,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Milestone v1.0 archived. Ready for /gsd:new-milestone to start next milestone.
+Stopped at: Starting milestone v1.1 — Policy Engine. Defining requirements.
 Resume file: None

@@ -1,0 +1,12 @@
+node_modules
+.git
+.planning
+.claude
+.agents
+tests
+src
+docs
+*.md
+.gitignore
+.npmignore
+dist

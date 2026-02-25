@@ -14,7 +14,7 @@
  * - Budget reset: yesterday's spend doesn't count today (time-windowed queries)
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as http from 'node:http';
 import { startServer } from '../src/server.js';
 import { CostAggregator } from '../src/cost-aggregator.js';

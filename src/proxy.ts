@@ -13,8 +13,9 @@
 
 import * as http from 'node:http';
 import * as https from 'node:https';
+import * as crypto from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { RouteMatch } from './types.js';
+import type { RouteMatch, LogEntry } from './types.js';
 import { mapOpenAIHeaders } from './providers/openai.js';
 import { mapAnthropicHeaders } from './providers/anthropic.js';
 import { mapCustomHeaders } from './providers/custom.js';
@@ -25,6 +26,8 @@ import type { PricingTable } from './pricing.js';
 import { CostAggregator } from './cost-aggregator.js';
 import type { LoopDetector } from './loop-detector.js';
 import type { BudgetEnforcer } from './budget-enforcer.js';
+import type { ActionLogger } from './action-logger.js';
+import { govynEvents } from './events.js';
 
 /**
  * Select the appropriate header mapping function based on provider type.
@@ -128,6 +131,7 @@ function sendLoopDetectedError(
  * @param budgetWarning - Optional budget warning info to add as response header
  * @param loopDetector - Optional loop detector for detecting repeated identical requests
  * @param budgetEnforcer - Optional budget enforcer for triggering loop block on detection
+ * @param actionLogger - Optional action logger for structured request logging
  */
 export async function forwardRequest(
   req: IncomingMessage,
@@ -139,6 +143,7 @@ export async function forwardRequest(
   budgetWarning?: { percentUsed: number; currentSpend: number; limit: number; resetsAt: string },
   loopDetector?: LoopDetector,
   budgetEnforcer?: BudgetEnforcer,
+  actionLogger?: ActionLogger,
 ): Promise<void> {
   const requestStart = Date.now();
   const { provider, upstreamPath } = routeMatch;
@@ -192,6 +197,35 @@ export async function forwardRequest(
       console.warn(
         `[govyn] Loop detected: agent=${agentId} path=${routeMatch.upstreamPath} bodyHash=${bodyHash} cooldown=${cooldownSeconds}s`,
       );
+
+      govynEvents.emit('event', {
+        type: 'loop_detected',
+        agentId,
+        cooldownSeconds,
+      });
+
+      // Log the loop_detected event
+      if (actionLogger) {
+        const logEntry: LogEntry = {
+          id: crypto.randomUUID(),
+          timestamp: new Date().toISOString(),
+          agent_id: agentId,
+          provider: routeMatch.providerType,
+          target: routeMatch.upstreamPath,
+          model: null,
+          input_tokens: null,
+          output_tokens: null,
+          cost: null,
+          priced: false,
+          latency_ms: Date.now() - requestStart,
+          status: 429,
+          has_payload: false,
+          payload_id: null,
+          storage_region: 'auto',
+        };
+        actionLogger.log(logEntry);
+      }
+
       sendLoopDetectedError(res, agentId, cooldownSeconds);
       return;
     }
@@ -269,24 +303,59 @@ export async function forwardRequest(
         // (happens after all data has been piped to client)
         upstreamRes.on('end', () => {
           const usage = extractTokenUsageFromSSE(sseChunks, routeMatch.providerType);
+          let costResult: { inputCost: number; outputCost: number; totalCost: number; priced: boolean } | undefined;
           if (usage) {
-            const cost = calculateCost(usage, pricingTable);
+            costResult = calculateCost(usage, pricingTable);
             aggregator.recordCost({
               agentId,
               model: usage.model,
               provider: routeMatch.providerType,
               inputTokens: usage.inputTokens,
               outputTokens: usage.outputTokens,
-              inputCost: cost.inputCost,
-              outputCost: cost.outputCost,
-              totalCost: cost.totalCost,
-              priced: cost.priced,
+              inputCost: costResult.inputCost,
+              outputCost: costResult.outputCost,
+              totalCost: costResult.totalCost,
+              priced: costResult.priced,
               timestamp: Date.now(),
             });
             const totalTokens = usage.inputTokens + usage.outputTokens;
             console.log(
-              `[govyn] Cost: agent=${agentId} model=${usage.model} tokens=${totalTokens} cost=$${cost.totalCost.toFixed(6)} priced=${cost.priced}`,
+              `[govyn] Cost: agent=${agentId} model=${usage.model} tokens=${totalTokens} cost=$${costResult.totalCost.toFixed(6)} priced=${costResult.priced}`,
             );
+          }
+
+          // Action logging (SSE path)
+          if (actionLogger) {
+            const mode = actionLogger.getMode(agentId);
+            const logId = crypto.randomUUID();
+            const payloadId = mode === 'full-payload' ? crypto.randomUUID() : null;
+
+            const logEntry: LogEntry = {
+              id: logId,
+              timestamp: new Date().toISOString(),
+              agent_id: agentId,
+              provider: routeMatch.providerType,
+              target: routeMatch.upstreamPath,
+              model: usage?.model ?? null,
+              input_tokens: usage?.inputTokens ?? null,
+              output_tokens: usage?.outputTokens ?? null,
+              cost: costResult?.totalCost ?? null,
+              priced: costResult?.priced ?? false,
+              latency_ms: Date.now() - requestStart,
+              status: statusCode,
+              has_payload: payloadId !== null,
+              payload_id: payloadId,
+              storage_region: 'auto',
+            };
+
+            actionLogger.log(logEntry);
+
+            if (payloadId) {
+              const sseResBody = Buffer.from(sseChunks.join(''), 'utf8');
+              const maxSize = actionLogger.config.maxBodySize;
+              const truncated = (body.length > maxSize) || (sseResBody.length > maxSize);
+              actionLogger.storePayload(payloadId, body, sseResBody, truncated);
+            }
           }
         });
 
@@ -311,27 +380,63 @@ export async function forwardRequest(
 
         upstreamRes.on('end', () => {
           // Extract tokens from the buffered response body
-          const responseBody = Buffer.concat(responseBodyChunks).toString('utf8');
-          const usage = extractTokenUsage(responseBody, routeMatch.providerType);
+          const responseBody = Buffer.concat(responseBodyChunks);
+          const responseBodyStr = responseBody.toString('utf8');
+          const usage = extractTokenUsage(responseBodyStr, routeMatch.providerType);
+          let costResult: { inputCost: number; outputCost: number; totalCost: number; priced: boolean } | undefined;
           if (usage) {
-            const cost = calculateCost(usage, pricingTable);
+            costResult = calculateCost(usage, pricingTable);
             aggregator.recordCost({
               agentId,
               model: usage.model,
               provider: routeMatch.providerType,
               inputTokens: usage.inputTokens,
               outputTokens: usage.outputTokens,
-              inputCost: cost.inputCost,
-              outputCost: cost.outputCost,
-              totalCost: cost.totalCost,
-              priced: cost.priced,
+              inputCost: costResult.inputCost,
+              outputCost: costResult.outputCost,
+              totalCost: costResult.totalCost,
+              priced: costResult.priced,
               timestamp: Date.now(),
             });
             const totalTokens = usage.inputTokens + usage.outputTokens;
             console.log(
-              `[govyn] Cost: agent=${agentId} model=${usage.model} tokens=${totalTokens} cost=$${cost.totalCost.toFixed(6)} priced=${cost.priced}`,
+              `[govyn] Cost: agent=${agentId} model=${usage.model} tokens=${totalTokens} cost=$${costResult.totalCost.toFixed(6)} priced=${costResult.priced}`,
             );
           }
+
+          // Action logging (non-SSE path)
+          if (actionLogger) {
+            const mode = actionLogger.getMode(agentId);
+            const logId = crypto.randomUUID();
+            const payloadId = mode === 'full-payload' ? crypto.randomUUID() : null;
+
+            const logEntry: LogEntry = {
+              id: logId,
+              timestamp: new Date().toISOString(),
+              agent_id: agentId,
+              provider: routeMatch.providerType,
+              target: routeMatch.upstreamPath,
+              model: usage?.model ?? null,
+              input_tokens: usage?.inputTokens ?? null,
+              output_tokens: usage?.outputTokens ?? null,
+              cost: costResult?.totalCost ?? null,
+              priced: costResult?.priced ?? false,
+              latency_ms: Date.now() - requestStart,
+              status: statusCode,
+              has_payload: payloadId !== null,
+              payload_id: payloadId,
+              storage_region: 'auto',
+            };
+
+            actionLogger.log(logEntry);
+
+            if (payloadId) {
+              const maxSize = actionLogger.config.maxBodySize;
+              const truncated = (body.length > maxSize) || (responseBody.length > maxSize);
+              actionLogger.storePayload(payloadId, body, responseBody, truncated);
+            }
+          }
+
           resolve();
         });
 
@@ -347,6 +452,29 @@ export async function forwardRequest(
 
     upstreamReq.on('error', (err) => {
       console.error(`[proxy] upstream connection error: ${err.message}`);
+
+      // Log the connection error
+      if (actionLogger) {
+        const logEntry: LogEntry = {
+          id: crypto.randomUUID(),
+          timestamp: new Date().toISOString(),
+          agent_id: agentId,
+          provider: routeMatch.providerType,
+          target: routeMatch.upstreamPath,
+          model: null,
+          input_tokens: null,
+          output_tokens: null,
+          cost: null,
+          priced: false,
+          latency_ms: Date.now() - requestStart,
+          status: 502,
+          has_payload: false,
+          payload_id: null,
+          storage_region: 'auto',
+        };
+        actionLogger.log(logEntry);
+      }
+
       sendErrorResponse(
         res,
         502,
@@ -357,6 +485,28 @@ export async function forwardRequest(
     });
 
     upstreamReq.on('timeout', () => {
+      // Log the timeout error
+      if (actionLogger) {
+        const logEntry: LogEntry = {
+          id: crypto.randomUUID(),
+          timestamp: new Date().toISOString(),
+          agent_id: agentId,
+          provider: routeMatch.providerType,
+          target: routeMatch.upstreamPath,
+          model: null,
+          input_tokens: null,
+          output_tokens: null,
+          cost: null,
+          priced: false,
+          latency_ms: Date.now() - requestStart,
+          status: 502,
+          has_payload: false,
+          payload_id: null,
+          storage_region: 'auto',
+        };
+        actionLogger.log(logEntry);
+      }
+
       upstreamReq.destroy();
       sendErrorResponse(res, 502, 'Upstream request timed out', 'upstream_timeout');
       resolve();

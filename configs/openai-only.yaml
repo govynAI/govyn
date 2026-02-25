@@ -1,0 +1,31 @@
+# Govyn Config: OpenAI-Only
+# Minimal setup for proxying OpenAI requests with a single agent and daily budget.
+
+version: 1
+
+proxy:
+  port: 4000
+  host: 0.0.0.0
+
+providers:
+  openai:
+    base_url: https://api.openai.com    # Default OpenAI API endpoint
+    api_key_env: OPENAI_API_KEY          # Reads from this environment variable
+
+agents:
+  my-agent:
+    api_keys: []                         # Optional: restrict to specific API keys
+
+budgets:
+  my-agent:
+    daily_limit: 5.00                    # Hard stop at $5/day
+    monthly_limit: 100.00                # Hard stop at $100/month
+    limit_type: hard                     # hard = block requests, soft = warn only
+    soft_warning_percent: 80             # Emit warning header at 80% usage
+
+logging:
+  enabled: true
+  directory: ./logs
+  default_mode: metadata                 # 'metadata' = summary only, 'full-payload' = include bodies
+  stdout: true                           # Print log lines to stdout (useful for Docker)
+  file: true                             # Write JSONL log files to disk

@@ -11,18 +11,21 @@
  */
 
 import * as http from 'node:http';
-import type { ProxyConfig } from './types.js';
+import * as crypto from 'node:crypto';
+import type { ProxyConfig, LoggingMode, LogEntry } from './types.js';
 import { matchRoute } from './router.js';
 import { forwardRequest } from './proxy.js';
 import { handleHealth } from './health.js';
 import { resolveAgentId } from './agents.js';
 import { handleCostApi } from './cost-api.js';
 import { handleBudgetApi } from './budget-api.js';
+import { handleLogApi } from './log-api.js';
 import { CostAggregator } from './cost-aggregator.js';
 import { BudgetEnforcer } from './budget-enforcer.js';
 import { LoopDetector } from './loop-detector.js';
 import { govynEvents } from './events.js';
 import type { PricingTable } from './pricing.js';
+import type { ActionLogger } from './action-logger.js';
 
 /**
  * Send a JSON error response.
@@ -48,6 +51,7 @@ function sendJsonError(
  * @param aggregator - In-memory cost aggregator for tracking request costs
  * @param budgetEnforcer - Budget enforcer for per-agent spending limits (optional, defaults to empty)
  * @param loopDetector - Loop detector for detecting repeated identical requests (optional)
+ * @param actionLogger - Action logger for structured request logging (optional)
  * @returns The created http.Server instance
  */
 export function startServer(
@@ -55,6 +59,7 @@ export function startServer(
   aggregator: CostAggregator,
   budgetEnforcer?: BudgetEnforcer,
   loopDetector?: LoopDetector,
+  actionLogger?: ActionLogger,
 ): http.Server {
   // Cast pricing to PricingTable — ProxyConfig.pricing and PricingTable are structurally equivalent
   const pricingTable = config.pricing as PricingTable;
@@ -108,6 +113,59 @@ export function startServer(
         return;
       }
 
+      // Logging mode toggle API: POST /api/logging/mode
+      if (method === 'POST' && url === '/api/logging/mode') {
+        if (!actionLogger) {
+          sendJsonError(res, 503, 'Action logging is not enabled', 'logging_disabled');
+          return;
+        }
+
+        // Read JSON body
+        const bodyChunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
+        req.on('end', () => {
+          try {
+            const bodyStr = Buffer.concat(bodyChunks).toString('utf8');
+            const parsed = JSON.parse(bodyStr) as { agent_id?: string; mode?: string };
+
+            if (!parsed.agent_id || typeof parsed.agent_id !== 'string') {
+              sendJsonError(res, 400, 'Missing or invalid agent_id', 'invalid_request');
+              return;
+            }
+            if (parsed.mode !== 'metadata' && parsed.mode !== 'full-payload') {
+              sendJsonError(res, 400, 'Invalid mode: must be "metadata" or "full-payload"', 'invalid_request');
+              return;
+            }
+
+            actionLogger.setMode(parsed.agent_id, parsed.mode as LoggingMode);
+
+            const responseBody = JSON.stringify({
+              success: true,
+              agent_id: parsed.agent_id,
+              mode: parsed.mode,
+            });
+            res.writeHead(200, {
+              'content-type': 'application/json',
+              'content-length': Buffer.byteLength(responseBody).toString(),
+            });
+            res.end(responseBody);
+          } catch {
+            sendJsonError(res, 400, 'Invalid JSON body', 'invalid_request');
+          }
+        });
+        return;
+      }
+
+      // Log query/purge API endpoints: GET /api/logs, GET /api/logs/:id, GET /api/logs/:id/payload, DELETE /api/logs?before=DATE
+      if (url.startsWith('/api/logs')) {
+        if (!actionLogger) {
+          sendJsonError(res, 503, 'Action logging is not enabled', 'logging_disabled');
+          return;
+        }
+        handleLogApi(req, res, actionLogger);
+        return;
+      }
+
       // Resolve agent identity before routing
       const agentIdentity = resolveAgentId(req, config.agents);
 
@@ -158,6 +216,28 @@ export function startServer(
           resetTime,
         });
 
+        // Log budget-blocked requests so they appear in action logs
+        if (actionLogger) {
+          const logEntry: LogEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            agent_id: agentIdentity.agentId,
+            provider: (matchRoute(url, config.providers)?.providerType ?? 'openai'),
+            target: url ?? '/',
+            model: null,
+            input_tokens: null,
+            output_tokens: null,
+            cost: null,
+            priced: false,
+            latency_ms: 0,
+            status: 429,
+            has_payload: false,
+            payload_id: null,
+            storage_region: 'auto',
+          };
+          actionLogger.log(logEntry);
+        }
+
         return;
       }
 
@@ -206,6 +286,7 @@ export function startServer(
         budgetWarning,
         loopDetector,
         enforcer,
+        actionLogger,
       ).catch((err: unknown) => {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error('[server] unhandled forwarding error:', message);

@@ -191,6 +191,79 @@ export interface BudgetStatus {
 }
 
 /**
+ * Logging mode for an agent.
+ * - 'metadata': log summary fields only (default)
+ * - 'full-payload': log full request/response bodies as separate files
+ */
+export type LoggingMode = 'metadata' | 'full-payload';
+
+/**
+ * A structured log entry for a single proxied request.
+ */
+export interface LogEntry {
+  /** Unique identifier for this log entry */
+  id: string;
+  /** ISO 8601 timestamp when the request was completed */
+  timestamp: string;
+  /** The agent that made the request */
+  agent_id: string;
+  /** The upstream provider type */
+  provider: ProviderType;
+  /** The upstream path that was forwarded to */
+  target: string;
+  /** The model used (if extractable from the response) */
+  model: string | null;
+  /** Number of input/prompt tokens (if extractable) */
+  input_tokens: number | null;
+  /** Number of output/completion tokens (if extractable) */
+  output_tokens: number | null;
+  /** Calculated cost in USD (if priced) */
+  cost: number | null;
+  /** Whether the model was found in the pricing table */
+  priced: boolean;
+  /** Request latency in milliseconds (request start to upstream response end) */
+  latency_ms: number;
+  /** HTTP status code of the upstream response */
+  status: number;
+  /** Whether a full payload file was stored for this request */
+  has_payload: boolean;
+  /** Reference ID to the payload file (null if metadata-only) */
+  payload_id: string | null;
+  /** Storage region where this log entry is stored */
+  storage_region: 'eu' | 'us' | 'auto';
+}
+
+/**
+ * Configuration for the action logging system.
+ */
+export interface LoggingConfig {
+  /** Whether logging is enabled (default: true) */
+  enabled: boolean;
+  /** Directory for log files (default: './logs') */
+  directory: string;
+  /** Default logging mode for all agents (default: 'metadata') */
+  defaultMode: LoggingMode;
+  /** Write log lines to stdout (default: true) */
+  stdout: boolean;
+  /** Write log lines to JSONL file (default: true) */
+  file: boolean;
+  /** Max body size in bytes before truncation (default: 1048576 = 1MB) */
+  maxBodySize: number;
+  /** File rotation trigger: max size in MB (default: 50) */
+  rotationMaxSizeMb: number;
+  /** File rotation trigger: hours between rotations (default: 24) */
+  rotationIntervalHours: number;
+  /** Auto-delete log files after N days (default: 30) */
+  retentionDays: number;
+  /** Auto-delete payload files after N days (default: 7) */
+  payloadRetentionDays: number;
+  /** Per-agent logging mode overrides */
+  agentModes: Map<string, LoggingMode>;
+  /** Storage region for GDPR compliance: 'eu', 'us', or 'auto' (default: 'auto') */
+  storageRegion: 'eu' | 'us' | 'auto';
+}
+
+/**
  * Overall proxy server configuration.
  */
 export interface ProxyConfig {
@@ -206,4 +279,6 @@ export interface ProxyConfig {
   pricing: Map<string, { inputPricePerMillion: number; outputPricePerMillion: number }>;
   /** Per-agent budget configuration */
   budgets: Map<string, BudgetConfig>;
+  /** Action logging configuration (optional, defaults applied if missing) */
+  logging?: LoggingConfig;
 }

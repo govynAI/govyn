@@ -252,7 +252,7 @@ describe('budget status API (/api/budgets)', () => {
 describe('budget enforcement middleware', () => {
   let upstream: Awaited<ReturnType<typeof createMockUpstream>>;
   let server: http.Server;
-  let serverPort: number;
+  let _serverPort: number;
   let aggregator: CostAggregator;
 
   beforeAll(async () => {
@@ -310,7 +310,7 @@ describe('budget enforcement middleware', () => {
     // Pre-populate spend over the daily limit
     aggregator.recordCost(makeRecord({ agentId: 'test-agent', totalCost: 11.0, inputCost: 4.0, outputCost: 7.0 }));
 
-    const res = await makeRequest(port, '/v1/custom/custom/v1/test');
+    const _res = await makeRequest(port, '/v1/custom/custom/v1/test');
     // Without agent header, agent is "unknown" — which has no budget. Set header:
     const response = await new Promise<{ statusCode: number; headers: http.IncomingHttpHeaders; body: string }>((resolve, reject) => {
       const req = http.request(

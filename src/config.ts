@@ -8,7 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { ProxyConfig, ProviderConfig, AgentConfig, BudgetConfig, LoopDetectionConfig } from './types.js';
+import type { ProxyConfig, ProviderConfig, AgentConfig, BudgetConfig, LoopDetectionConfig, LoggingConfig, LoggingMode } from './types.js';
 import { loadPricing } from './pricing.js';
 
 /**
@@ -40,6 +40,20 @@ interface RawConfig {
     limit_type?: 'hard' | 'soft';
     soft_warning_percent?: number;
   } | null>;
+  logging?: {
+    enabled?: boolean;
+    directory?: string;
+    default_mode?: string;
+    stdout?: boolean;
+    file?: boolean;
+    max_body_size?: number;
+    rotation_max_size_mb?: number;
+    rotation_interval_hours?: number;
+    retention_days?: number;
+    payload_retention_days?: number;
+    agent_modes?: Record<string, string>;
+    storage_region?: string;
+  };
 }
 
 /**
@@ -134,7 +148,8 @@ export function loadConfig(filePath?: string): ProxyConfig {
   const rawAgents = cfg.agents ?? {};
   for (const [agentName, agentDef] of Object.entries(rawAgents)) {
     if (typeof agentName !== 'string') continue;
-    const apiKeys = agentDef?.api_keys ?? [];
+    if (agentDef === null || agentDef === undefined) continue;
+    const apiKeys = agentDef.api_keys ?? [];
 
     // Parse per-agent loop detection config with defaults
     let loopDetection: LoopDetectionConfig | undefined;
@@ -172,6 +187,53 @@ export function loadConfig(filePath?: string): ProxyConfig {
     });
   }
 
+  // Parse logging section
+  let logging: LoggingConfig | undefined;
+  if (cfg.logging) {
+    const rawLog = cfg.logging;
+
+    // Validate default_mode
+    const defaultMode: LoggingMode = rawLog.default_mode === 'full-payload' ? 'full-payload' : 'metadata';
+
+    // Parse per-agent modes with validation
+    const agentModes = new Map<string, LoggingMode>();
+    if (rawLog.agent_modes) {
+      for (const [agentName, modeStr] of Object.entries(rawLog.agent_modes)) {
+        if (modeStr === 'metadata' || modeStr === 'full-payload') {
+          agentModes.set(agentName, modeStr);
+        } else {
+          console.warn(`[govyn] Invalid logging mode '${modeStr}' for agent '${agentName}', using default`);
+        }
+      }
+    }
+
+    // Validate storage_region
+    let storageRegion: 'eu' | 'us' | 'auto' = 'auto';
+    if (rawLog.storage_region) {
+      const region = rawLog.storage_region.toLowerCase();
+      if (region === 'eu' || region === 'us' || region === 'auto') {
+        storageRegion = region;
+      } else {
+        throw new Error(`Invalid config at ${absolutePath}: logging.storage_region must be 'eu', 'us', or 'auto', got '${rawLog.storage_region}'`);
+      }
+    }
+
+    logging = {
+      enabled: rawLog.enabled ?? true,
+      directory: rawLog.directory ?? './logs',
+      defaultMode,
+      stdout: rawLog.stdout ?? true,
+      file: rawLog.file ?? true,
+      maxBodySize: rawLog.max_body_size ?? 1048576,
+      rotationMaxSizeMb: rawLog.rotation_max_size_mb ?? 50,
+      rotationIntervalHours: rawLog.rotation_interval_hours ?? 24,
+      retentionDays: rawLog.retention_days ?? 30,
+      payloadRetentionDays: rawLog.payload_retention_days ?? 7,
+      agentModes,
+      storageRegion,
+    };
+  }
+
   const config: ProxyConfig = {
     port: cfg.proxy.port,
     host: cfg.proxy.host ?? '0.0.0.0',
@@ -179,6 +241,7 @@ export function loadConfig(filePath?: string): ProxyConfig {
     agents,
     pricing,
     budgets,
+    ...(logging ? { logging } : {}),
   };
 
   console.log(`[govyn] Loaded config from ${absolutePath}`);

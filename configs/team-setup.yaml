@@ -1,0 +1,73 @@
+# Govyn Config: Team Setup
+# Multi-agent team with soft/hard budgets and mixed logging modes.
+# Full-payload logging for the debug agent, metadata-only for others.
+
+version: 1
+
+proxy:
+  port: 4000
+  host: 0.0.0.0
+
+providers:
+  openai:
+    base_url: https://api.openai.com
+    api_key_env: OPENAI_API_KEY
+
+  anthropic:
+    base_url: https://api.anthropic.com
+    api_key_env: ANTHROPIC_API_KEY
+
+agents:
+  frontend-agent:
+    api_keys: []
+    loop_detection:
+      threshold: 5                        # Stricter loop detection for UI agents
+      window_seconds: 30
+      cooldown_seconds: 120
+
+  backend-agent:
+    api_keys: []
+    loop_detection:
+      threshold: 15                       # More lenient for batch processing
+      window_seconds: 60
+      cooldown_seconds: 300
+
+  debug-agent:
+    api_keys: []
+
+budgets:
+  frontend-agent:
+    daily_limit: 5.00
+    monthly_limit: 50.00
+    limit_type: hard                      # Hard limit: block at threshold
+    soft_warning_percent: 80
+
+  backend-agent:
+    daily_limit: 20.00
+    monthly_limit: 400.00
+    limit_type: soft                      # Soft limit: warn but allow
+    soft_warning_percent: 70
+
+  debug-agent:
+    daily_limit: 2.00
+    monthly_limit: 20.00
+    limit_type: hard
+    soft_warning_percent: 90
+
+logging:
+  enabled: true
+  directory: ./logs
+  default_mode: metadata                  # Most agents get metadata-only logging
+  stdout: true
+  file: true
+  max_body_size: 524288                   # 512KB max body capture
+  rotation_max_size_mb: 25               # Rotate at 25MB (smaller for teams)
+  rotation_interval_hours: 12            # Rotate every 12 hours
+  retention_days: 14                     # Keep logs for 2 weeks
+  payload_retention_days: 3              # Keep payload files for 3 days
+
+  # Per-agent logging mode overrides
+  agent_modes:
+    debug-agent: full-payload             # Full request/response bodies for debugging
+    frontend-agent: metadata              # Summary only
+    backend-agent: metadata               # Summary only

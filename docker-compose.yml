@@ -1,0 +1,30 @@
+version: "3.8"
+services:
+  proxy:
+    build: .
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./govyn.config.yaml:/app/govyn.config.yaml:ro
+      - govyn-logs:/app/logs
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    restart: unless-stopped
+
+  # Optional: PostgreSQL for future persistent storage
+  # Uncomment when dashboard phase is reached
+  # postgres:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_DB: govyn
+  #     POSTGRES_USER: govyn
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-govyn_dev}
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+volumes:
+  govyn-logs:
+  # pgdata:

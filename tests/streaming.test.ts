@@ -155,7 +155,7 @@ describe('SSE streaming passthrough', () => {
 
   it('does not crash and cleans up on client disconnect mid-stream', async () => {
     // Make a request and immediately destroy the connection
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve) => {
       const req = http.get(
         `http://127.0.0.1:${PROXY_PORT}/v1/custom/custom/stream`,
         (res) => {

@@ -53,7 +53,12 @@ Full details: [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 - Events emitted and logged for all policy evaluations
 - 100 policies evaluate in <5ms (benchmark test)
 
-**Estimated plans:** 3
+**Plans:** 3 plans
+
+Plans:
+- [ ] 06-01-PLAN.md -- Policy YAML schema definition and strict parser with line-number errors (TDD)
+- [ ] 06-02-PLAN.md -- PolicyEngine class with scoping hierarchy and performance benchmark (TDD)
+- [ ] 06-03-PLAN.md -- Pipeline integration, 403/429 error responses, events, and action log enrichment
 
 ---
 

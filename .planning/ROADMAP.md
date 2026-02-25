@@ -122,11 +122,11 @@ Plans:
   3. Full-payload mode captures the entire request and response body for an agent when configured
   4. Metadata mode captures only the summary fields without storing full content
   5. The log query API returns filtered results by agent, time range, or status
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: Async structured log writer, metadata/full-payload modes, log rotation
-- [ ] 04-02: Log query API with filtering
+- [ ] 04-01-PLAN.md — ActionLogger class, JSONL writer, payload store, metadata/full-payload modes, YAML config, proxy pipeline wiring (LOGG-01, LOGG-02, LOGG-03, LOGG-04)
+- [ ] 04-02-PLAN.md — LogRotator with size/time rotation and gzip, retention cleanup, log query API with cursor pagination and filtering (LOGG-05, LOGG-06)
 
 ---
 
@@ -411,7 +411,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Proxy Server Foundation | 2/2 | Complete   | 2026-02-24 | - |
 | 2. Agent Identification & Cost Tracking | 2/2 | Complete    | 2026-02-24 | - |
 | 3. Budget Enforcement & Loop Detection | 2/2 | Complete    | 2026-02-25 | - |
-| 4. Action Logging | M1: Core Proxy MVP | 0/2 | Not started | - |
+| 4. Action Logging | M1: Core Proxy MVP | 0/2 | Planned | - |
 | 5. Packaging, Testing & Deployment | M1: Core Proxy MVP | 0/3 | Not started | - |
 | 6. Policy Definition & Parser | M2: Policy Engine | 0/2 | Not started | - |
 | 7. Policy Evaluation Engine | M2: Policy Engine | 0/2 | Not started | - |

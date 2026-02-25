@@ -20,6 +20,7 @@ import { handleCostApi } from './cost-api.js';
 import { handleBudgetApi } from './budget-api.js';
 import { CostAggregator } from './cost-aggregator.js';
 import { BudgetEnforcer } from './budget-enforcer.js';
+import { LoopDetector } from './loop-detector.js';
 import { govynEvents } from './events.js';
 import type { PricingTable } from './pricing.js';
 
@@ -46,12 +47,14 @@ function sendJsonError(
  * @param config - Proxy configuration (port, host, providers, agents, pricing, budgets)
  * @param aggregator - In-memory cost aggregator for tracking request costs
  * @param budgetEnforcer - Budget enforcer for per-agent spending limits (optional, defaults to empty)
+ * @param loopDetector - Loop detector for detecting repeated identical requests (optional)
  * @returns The created http.Server instance
  */
 export function startServer(
   config: ProxyConfig,
   aggregator: CostAggregator,
   budgetEnforcer?: BudgetEnforcer,
+  loopDetector?: LoopDetector,
 ): http.Server {
   // Cast pricing to PricingTable — ProxyConfig.pricing and PricingTable are structurally equivalent
   const pricingTable = config.pricing as PricingTable;
@@ -79,6 +82,29 @@ export function startServer(
       // Budget status API endpoint
       if (url.startsWith('/api/budgets')) {
         handleBudgetApi(req, res, enforcer);
+        return;
+      }
+
+      // Agent unblock API endpoint: POST /api/agents/:agentId/unblock
+      if (method === 'POST' && url.startsWith('/api/agents/') && url.endsWith('/unblock')) {
+        // Extract agentId from URL: /api/agents/{agentId}/unblock
+        const agentIdMatch = url.match(/^\/api\/agents\/(.+)\/unblock$/);
+        const agentId = agentIdMatch ? agentIdMatch[1] : null;
+        if (!agentId) {
+          sendJsonError(res, 400, 'Invalid agent ID in URL', 'invalid_request');
+          return;
+        }
+        const wasBlocked = enforcer.unblockAgent(agentId);
+        if (wasBlocked) {
+          const responseBody = JSON.stringify({ success: true, agent_id: agentId });
+          res.writeHead(200, {
+            'content-type': 'application/json',
+            'content-length': Buffer.byteLength(responseBody).toString(),
+          });
+          res.end(responseBody);
+        } else {
+          sendJsonError(res, 404, `Agent ${agentId} is not currently blocked`, 'agent_not_blocked');
+        }
         return;
       }
 
@@ -178,6 +204,8 @@ export function startServer(
         pricingTable,
         aggregator,
         budgetWarning,
+        loopDetector,
+        enforcer,
       ).catch((err: unknown) => {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error('[server] unhandled forwarding error:', message);

@@ -23,6 +23,8 @@ import { extractTokenUsage, extractTokenUsageFromSSE } from './tokens.js';
 import { calculateCost } from './pricing.js';
 import type { PricingTable } from './pricing.js';
 import { CostAggregator } from './cost-aggregator.js';
+import type { LoopDetector } from './loop-detector.js';
+import type { BudgetEnforcer } from './budget-enforcer.js';
 
 /**
  * Select the appropriate header mapping function based on provider type.
@@ -70,6 +72,39 @@ function sendErrorResponse(
 }
 
 /**
+ * Send a loop_detected 429 response in Govyn-native format.
+ *
+ * @param res - The outgoing client response
+ * @param agentId - The agent that triggered loop detection
+ * @param cooldownSeconds - How long the agent will be blocked
+ */
+function sendLoopDetectedError(
+  res: ServerResponse,
+  agentId: string,
+  cooldownSeconds: number,
+): void {
+  const cooldownExpiresAt = new Date(Date.now() + cooldownSeconds * 1000).toISOString();
+  const body = JSON.stringify({
+    error: {
+      type: 'loop_error',
+      code: 'loop_detected',
+      message: 'Agent blocked: repeated identical requests detected',
+      details: {
+        agent_id: agentId,
+        cooldown_seconds: cooldownSeconds,
+        cooldown_expires_at: cooldownExpiresAt,
+      },
+    },
+  });
+  res.writeHead(429, {
+    'content-type': 'application/json',
+    'content-length': Buffer.byteLength(body).toString(),
+    'retry-after': cooldownSeconds.toString(),
+  });
+  res.end(body);
+}
+
+/**
  * Forward an incoming HTTP request to the upstream provider API.
  *
  * - Uses Node.js http/https module (NOT node-fetch, NOT axios)
@@ -82,6 +117,7 @@ function sendErrorResponse(
  * - For proxy errors (upstream unreachable, timeout): returns 502 with Govyn error format
  * - Logs time from request start to first upstream byte
  * - After response completes, extracts token usage and records cost (non-blocking)
+ * - If loopDetector provided: checks for repeated identical requests before forwarding
  *
  * @param req - The incoming client request
  * @param res - The outgoing client response
@@ -90,6 +126,8 @@ function sendErrorResponse(
  * @param pricingTable - Pricing table for cost calculation
  * @param aggregator - Cost aggregator to record results
  * @param budgetWarning - Optional budget warning info to add as response header
+ * @param loopDetector - Optional loop detector for detecting repeated identical requests
+ * @param budgetEnforcer - Optional budget enforcer for triggering loop block on detection
  */
 export async function forwardRequest(
   req: IncomingMessage,
@@ -99,6 +137,8 @@ export async function forwardRequest(
   pricingTable: PricingTable,
   aggregator: CostAggregator,
   budgetWarning?: { percentUsed: number; currentSpend: number; limit: number; resetsAt: string },
+  loopDetector?: LoopDetector,
+  budgetEnforcer?: BudgetEnforcer,
 ): Promise<void> {
   const requestStart = Date.now();
   const { provider, upstreamPath } = routeMatch;
@@ -139,6 +179,23 @@ export async function forwardRequest(
   }
 
   const body = Buffer.concat(bodyChunks);
+
+  // Loop detection: check for repeated identical requests before forwarding
+  if (loopDetector && budgetEnforcer) {
+    const bodyHash = loopDetector.getRequestHash(body);
+    loopDetector.recordRequest(agentId, routeMatch.upstreamPath, bodyHash);
+    if (loopDetector.isLooping(agentId, routeMatch.upstreamPath, bodyHash)) {
+      // Get agent-specific cooldown (or default 300s)
+      const agentLoopConfig = loopDetector.getAgentConfig(agentId);
+      const cooldownSeconds = agentLoopConfig.cooldownSeconds;
+      budgetEnforcer.blockAgent(agentId, 'loop_detected', cooldownSeconds);
+      console.warn(
+        `[govyn] Loop detected: agent=${agentId} path=${routeMatch.upstreamPath} bodyHash=${bodyHash} cooldown=${cooldownSeconds}s`,
+      );
+      sendLoopDetectedError(res, agentId, cooldownSeconds);
+      return;
+    }
+  }
 
   // Update content-length to match actual body
   if (body.length > 0) {

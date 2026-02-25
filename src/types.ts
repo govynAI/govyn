@@ -127,6 +127,57 @@ export interface CostSummary {
  */
 export type TimePeriod = 'hour' | 'day' | 'month' | 'all';
 
+/** Per-agent budget configuration from YAML */
+export interface BudgetConfig {
+  /** Daily spending limit in USD (null = no daily limit) */
+  dailyLimit: number | null;
+  /** Monthly spending limit in USD (null = no monthly limit) */
+  monthlyLimit: number | null;
+  /** Hard or soft limit behavior */
+  limitType: 'hard' | 'soft';
+  /** Soft warning threshold as a percentage (0-100), default 80 */
+  softWarningPercent: number;
+}
+
+/** Result of a budget check before proxying a request */
+export interface BudgetCheckResult {
+  /** Whether the request is allowed to proceed */
+  allowed: boolean;
+  /** If blocked, the reason code */
+  code?: 'budget_exceeded_daily' | 'budget_exceeded_monthly';
+  /** If blocked or warning, the limit that was hit */
+  limitAmount?: number;
+  /** Current spend in the relevant period */
+  currentSpend?: number;
+  /** ISO timestamp when the budget resets */
+  resetTime?: string;
+  /** Whether a soft warning should be emitted */
+  warning?: boolean;
+  /** Percentage of budget used (for warnings) */
+  percentUsed?: number;
+}
+
+/** Budget status for a single agent */
+export interface BudgetStatus {
+  agentId: string;
+  daily: {
+    limit: number | null;
+    spent: number;
+    remaining: number | null;
+    percentUsed: number | null;
+    resetsAt: string;
+  };
+  monthly: {
+    limit: number | null;
+    spent: number;
+    remaining: number | null;
+    percentUsed: number | null;
+    resetsAt: string;
+  };
+  limitType: 'hard' | 'soft';
+  blocked: boolean;
+}
+
 /**
  * Overall proxy server configuration.
  */
@@ -141,4 +192,6 @@ export interface ProxyConfig {
   agents: Map<string, AgentConfig>;
   /** Pricing table for cost calculation */
   pricing: Map<string, { inputPricePerMillion: number; outputPricePerMillion: number }>;
+  /** Per-agent budget configuration */
+  budgets: Map<string, BudgetConfig>;
 }

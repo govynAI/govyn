@@ -22,3 +22,10 @@ providers:
 #   my-custom-model:
 #     input: 1.00    # price per million input tokens
 #     output: 5.00   # price per million output tokens
+
+# budgets:
+#   research-agent:
+#     daily_limit: 10.00
+#     monthly_limit: 100.00
+#     limit_type: hard           # hard = block, soft = warn
+#     soft_warning_percent: 80   # emit warning at 80% of limit

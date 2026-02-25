@@ -40,6 +40,7 @@ const testConfig: ProxyConfig = {
   providers: new Map(),
   agents: new Map(),
   pricing: new Map(),
+  budgets: new Map(),
 };
 
 let server: http.Server;

@@ -74,6 +74,7 @@ beforeAll(async () => {
     ]),
     agents: new Map(),
     pricing: new Map(),
+    budgets: new Map(),
   };
   proxyServer = startServer(config, new CostAggregator());
   await waitForListen(proxyServer);

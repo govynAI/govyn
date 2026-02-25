@@ -113,6 +113,7 @@ beforeAll(async () => {
     ]),
     agents: new Map(),
     pricing: new Map(),
+    budgets: new Map(),
   };
   proxyServer = startServer(config, new CostAggregator());
   await waitForListen(proxyServer);
@@ -239,6 +240,7 @@ describe('proxy own errors still return 502', () => {
       ]),
       agents: new Map(),
       pricing: new Map(),
+      budgets: new Map(),
     };
     const unreachableProxy = startServer(config, new CostAggregator());
     await new Promise<void>((resolve) => {

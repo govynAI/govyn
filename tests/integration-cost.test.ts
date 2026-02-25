@@ -157,6 +157,7 @@ describe('cost tracking integration', () => {
         ['sales-bot', { name: 'sales-bot', apiKeys: ['govyn-key-sales-bot'] }],
       ]),
       pricing: pricingTable,
+      budgets: new Map(),
     };
 
     proxyServer = startServer(config, aggregator);

@@ -109,6 +109,7 @@ function createTestProxy(providers: Map<string, ProviderConfig>): Promise<{
       providers,
       agents: new Map(),
       pricing: new Map(),
+      budgets: new Map(),
     };
     const server = startServer(config, new CostAggregator());
     // startServer calls server.listen — wait for it

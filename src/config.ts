@@ -8,7 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { ProxyConfig, ProviderConfig, AgentConfig } from './types.js';
+import type { ProxyConfig, ProviderConfig, AgentConfig, BudgetConfig } from './types.js';
 import { loadPricing } from './pricing.js';
 
 /**
@@ -27,6 +27,12 @@ interface RawConfig {
   };
   agents?: Record<string, { api_keys?: string[] } | null>;
   pricing?: Record<string, { input: number; output: number }>;
+  budgets?: Record<string, {
+    daily_limit?: number;
+    monthly_limit?: number;
+    limit_type?: 'hard' | 'soft';
+    soft_warning_percent?: number;
+  } | null>;
 }
 
 /**
@@ -133,12 +139,26 @@ export function loadConfig(filePath?: string): ProxyConfig {
   const configPricing: Record<string, { input: number; output: number }> | undefined = rawPricing;
   const pricing = loadPricing(configPricing);
 
+  // Parse budgets section
+  const budgets = new Map<string, BudgetConfig>();
+  const rawBudgets = cfg.budgets ?? {};
+  for (const [agentName, budgetDef] of Object.entries(rawBudgets)) {
+    if (typeof agentName !== 'string' || !budgetDef) continue;
+    budgets.set(agentName, {
+      dailyLimit: budgetDef.daily_limit ?? null,
+      monthlyLimit: budgetDef.monthly_limit ?? null,
+      limitType: budgetDef.limit_type ?? 'hard',
+      softWarningPercent: budgetDef.soft_warning_percent ?? 80,
+    });
+  }
+
   const config: ProxyConfig = {
     port: cfg.proxy.port,
     host: cfg.proxy.host ?? '0.0.0.0',
     providers,
     agents,
     pricing,
+    budgets,
   };
 
   console.log(`[govyn] Loaded config from ${absolutePath}`);

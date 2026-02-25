@@ -99,7 +99,7 @@ Plans:
 **Requirements**: BUDG-01, BUDG-02, BUDG-03, BUDG-04, BUDG-05, BUDG-06, BUDG-07
 **Success Criteria** (what must be TRUE):
   1. An agent exceeding its daily budget limit is blocked on the next request with a parseable JSON error specifying the limit and current spend
-  2. An agent making 20+ identical calls within 60 seconds is auto-blocked with a loop_detected error
+  2. An agent making 10+ identical calls within 60 seconds is auto-blocked with a loop_detected error
   3. Soft limit requests are forwarded but a warning event is emitted
   4. Budget status for any agent is queryable via API
   5. Budget limits are resettable: daily at midnight UTC, monthly at month start

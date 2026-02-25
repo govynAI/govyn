@@ -5,6 +5,8 @@
  * Each incoming request is matched via matchRoute and forwarded via forwardRequest.
  * GET /health is served directly via handleHealth.
  * GET /api/costs is served via handleCostApi.
+ * GET /api/budgets is served via handleBudgetApi.
+ * Budget limits are enforced before forwarding: hard limits return 429, soft limits warn.
  * Unmatched routes return 404 JSON. Errors return appropriate status codes.
  */
 
@@ -15,7 +17,10 @@ import { forwardRequest } from './proxy.js';
 import { handleHealth } from './health.js';
 import { resolveAgentId } from './agents.js';
 import { handleCostApi } from './cost-api.js';
+import { handleBudgetApi } from './budget-api.js';
 import { CostAggregator } from './cost-aggregator.js';
+import { BudgetEnforcer } from './budget-enforcer.js';
+import { govynEvents } from './events.js';
 import type { PricingTable } from './pricing.js';
 
 /**
@@ -38,13 +43,21 @@ function sendJsonError(
 /**
  * Create and start the Govyn HTTP proxy server.
  *
- * @param config - Proxy configuration (port, host, providers, agents, pricing)
+ * @param config - Proxy configuration (port, host, providers, agents, pricing, budgets)
  * @param aggregator - In-memory cost aggregator for tracking request costs
+ * @param budgetEnforcer - Budget enforcer for per-agent spending limits (optional, defaults to empty)
  * @returns The created http.Server instance
  */
-export function startServer(config: ProxyConfig, aggregator: CostAggregator): http.Server {
+export function startServer(
+  config: ProxyConfig,
+  aggregator: CostAggregator,
+  budgetEnforcer?: BudgetEnforcer,
+): http.Server {
   // Cast pricing to PricingTable — ProxyConfig.pricing and PricingTable are structurally equivalent
   const pricingTable = config.pricing as PricingTable;
+
+  // Use provided enforcer or create a default (no limits) enforcer
+  const enforcer = budgetEnforcer ?? new BudgetEnforcer(config.budgets, aggregator);
 
   const server = http.createServer(
     (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -63,8 +76,90 @@ export function startServer(config: ProxyConfig, aggregator: CostAggregator): ht
         return;
       }
 
+      // Budget status API endpoint
+      if (url.startsWith('/api/budgets')) {
+        handleBudgetApi(req, res, enforcer);
+        return;
+      }
+
       // Resolve agent identity before routing
       const agentIdentity = resolveAgentId(req, config.agents);
+
+      // Check budget before forwarding
+      const budgetResult = enforcer.checkBudget(agentIdentity.agentId);
+
+      if (!budgetResult.allowed) {
+        // Hard limit exceeded — block with 429
+        const resetTime = budgetResult.resetTime ?? new Date().toISOString();
+        const resetDate = new Date(resetTime);
+        const secondsUntilReset = Math.max(
+          0,
+          Math.ceil((resetDate.getTime() - Date.now()) / 1000),
+        );
+
+        const errorBody = JSON.stringify({
+          error: {
+            type: 'budget_error',
+            code: budgetResult.code,
+            message:
+              budgetResult.code === 'budget_exceeded_daily'
+                ? 'Agent has exceeded its daily budget limit'
+                : 'Agent has exceeded its monthly budget limit',
+            details: {
+              limit_type: budgetResult.code === 'budget_exceeded_daily' ? 'daily' : 'monthly',
+              limit_amount: budgetResult.limitAmount,
+              current_spend: budgetResult.currentSpend,
+              reset_time: resetTime,
+              agent_id: agentIdentity.agentId,
+            },
+          },
+        });
+
+        res.writeHead(429, {
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(errorBody).toString(),
+          'retry-after': secondsUntilReset.toString(),
+        });
+        res.end(errorBody);
+
+        // Also emit internal event for monitoring/alerting
+        govynEvents.emit('event', {
+          type: 'budget_exceeded',
+          agentId: agentIdentity.agentId,
+          code: budgetResult.code ?? '',
+          limitAmount: budgetResult.limitAmount ?? 0,
+          currentSpend: budgetResult.currentSpend ?? 0,
+          resetTime,
+        });
+
+        return;
+      }
+
+      // Build budget warning info if applicable
+      let budgetWarning:
+        | { percentUsed: number; currentSpend: number; limit: number; resetsAt: string }
+        | undefined;
+
+      if (budgetResult.warning && budgetResult.limitAmount !== undefined) {
+        const limitPeriod = budgetResult.code?.includes('daily') ? 'daily' : 'monthly';
+        budgetWarning = {
+          percentUsed: budgetResult.percentUsed ?? 0,
+          currentSpend: budgetResult.currentSpend ?? 0,
+          limit: budgetResult.limitAmount,
+          resetsAt: budgetResult.resetTime ?? new Date().toISOString(),
+        };
+
+        // Emit internal budget_warning event
+        govynEvents.emit('event', {
+          type: 'budget_warning',
+          agentId: agentIdentity.agentId,
+          percentUsed: budgetResult.percentUsed ?? 0,
+          currentSpend: budgetResult.currentSpend ?? 0,
+          limit: budgetResult.limitAmount,
+          resetsAt: budgetResult.resetTime ?? new Date().toISOString(),
+          limitPeriod,
+        });
+      }
 
       // Match the request URL to a provider
       const routeMatch = matchRoute(url, config.providers);
@@ -75,17 +170,23 @@ export function startServer(config: ProxyConfig, aggregator: CostAggregator): ht
       }
 
       // Forward the request to the upstream provider, attributing cost to the resolved agent
-      forwardRequest(req, res, routeMatch, agentIdentity.agentId, pricingTable, aggregator).catch(
-        (err: unknown) => {
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          console.error('[server] unhandled forwarding error:', message);
-          if (!res.headersSent) {
-            sendJsonError(res, 500, 'Internal proxy error', 'internal_error');
-          } else if (!res.writableEnded) {
-            res.end();
-          }
-        },
-      );
+      forwardRequest(
+        req,
+        res,
+        routeMatch,
+        agentIdentity.agentId,
+        pricingTable,
+        aggregator,
+        budgetWarning,
+      ).catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        console.error('[server] unhandled forwarding error:', message);
+        if (!res.headersSent) {
+          sendJsonError(res, 500, 'Internal proxy error', 'internal_error');
+        } else if (!res.writableEnded) {
+          res.end();
+        }
+      });
     },
   );
 

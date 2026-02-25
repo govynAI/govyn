@@ -89,6 +89,7 @@ function sendErrorResponse(
  * @param agentId - The resolved agent identifier for this request
  * @param pricingTable - Pricing table for cost calculation
  * @param aggregator - Cost aggregator to record results
+ * @param budgetWarning - Optional budget warning info to add as response header
  */
 export async function forwardRequest(
   req: IncomingMessage,
@@ -97,6 +98,7 @@ export async function forwardRequest(
   agentId: string,
   pricingTable: PricingTable,
   aggregator: CostAggregator,
+  budgetWarning?: { percentUsed: number; currentSpend: number; limit: number; resetsAt: string },
 ): Promise<void> {
   const requestStart = Date.now();
   const { provider, upstreamPath } = routeMatch;
@@ -176,6 +178,16 @@ export async function forwardRequest(
         }
       }
 
+      // Build budget warning header value if applicable
+      const budgetWarningHeaderValue = budgetWarning
+        ? JSON.stringify({
+            percent_used: budgetWarning.percentUsed,
+            current_spend: budgetWarning.currentSpend,
+            limit: budgetWarning.limit,
+            resets_at: budgetWarning.resetsAt,
+          })
+        : undefined;
+
       // Check if the upstream response is SSE (text/event-stream)
       const contentType = upstreamRes.headers['content-type'] ?? '';
       const isSSE = contentType.includes('text/event-stream');
@@ -187,9 +199,14 @@ export async function forwardRequest(
           sseChunks.push(chunk.toString('utf8'));
         });
 
+        // Build extra headers for SSE response (budget warning if applicable)
+        const sseExtraHeaders: Record<string, string> | undefined = budgetWarningHeaderValue
+          ? { 'x-govyn-budget-warning': budgetWarningHeaderValue }
+          : undefined;
+
         // Delegate to streaming handler — sets its own headers (content-type, cache-control, connection)
         // and pipes chunks without buffering
-        handleStreamingResponse(upstreamRes, res, statusCode);
+        handleStreamingResponse(upstreamRes, res, statusCode, sseExtraHeaders);
 
         // After the stream ends, extract tokens and record cost
         // (happens after all data has been piped to client)
@@ -222,6 +239,10 @@ export async function forwardRequest(
         upstreamRes.on('error', resolve);
       } else {
         // Non-streaming: forward status + all headers + body verbatim
+        // Add budget warning header if applicable
+        if (budgetWarningHeaderValue) {
+          responseHeaders['x-govyn-budget-warning'] = budgetWarningHeaderValue;
+        }
         res.writeHead(statusCode, responseHeaders);
         upstreamRes.pipe(res);
 

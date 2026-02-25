@@ -18,14 +18,16 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
  * - Handles upstream close: ends client response cleanly
  * - Handles client disconnect: destroys upstream connection to avoid resource leaks
  *
- * @param upstreamRes - The upstream HTTP response (source stream)
- * @param clientRes   - The client HTTP response (destination stream)
- * @param statusCode  - HTTP status code to send to the client (from upstream)
+ * @param upstreamRes   - The upstream HTTP response (source stream)
+ * @param clientRes     - The client HTTP response (destination stream)
+ * @param statusCode    - HTTP status code to send to the client (from upstream)
+ * @param extraHeaders  - Optional extra headers to include in the SSE response
  */
 export function handleStreamingResponse(
   upstreamRes: IncomingMessage,
   clientRes: ServerResponse,
   statusCode: number = 200,
+  extraHeaders?: Record<string, string>,
 ): void {
   // Record timestamp when first data chunk arrives for latency tracking (PRXY-06)
   let firstChunkReceived = false;
@@ -42,6 +44,7 @@ export function handleStreamingResponse(
     'content-type': 'text/event-stream',
     'cache-control': 'no-cache',
     'connection': 'keep-alive',
+    ...extraHeaders,
   });
 
   // Pipe upstream to client — Node.js pipe() handles backpressure automatically.

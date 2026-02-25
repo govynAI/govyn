@@ -33,6 +33,16 @@ export interface RouteMatch {
   providerType: ProviderType;
 }
 
+/** Per-agent loop detection configuration from YAML */
+export interface LoopDetectionConfig {
+  /** Number of identical calls to trigger loop detection (default: 10) */
+  threshold: number;
+  /** Time window in seconds to count identical calls (default: 60) */
+  windowSeconds: number;
+  /** Cooldown period in seconds after loop detected (default: 300 = 5 min) */
+  cooldownSeconds: number;
+}
+
 /**
  * Configuration for a named agent that can send requests through the proxy.
  */
@@ -41,6 +51,8 @@ export interface AgentConfig {
   name: string;
   /** Optional list of API keys scoped to this agent */
   apiKeys?: string[];
+  /** Per-agent loop detection overrides */
+  loopDetection?: LoopDetectionConfig;
 }
 
 /**
@@ -144,7 +156,7 @@ export interface BudgetCheckResult {
   /** Whether the request is allowed to proceed */
   allowed: boolean;
   /** If blocked, the reason code */
-  code?: 'budget_exceeded_daily' | 'budget_exceeded_monthly';
+  code?: 'budget_exceeded_daily' | 'budget_exceeded_monthly' | 'loop_detected';
   /** If blocked or warning, the limit that was hit */
   limitAmount?: number;
   /** Current spend in the relevant period */

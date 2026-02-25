@@ -15,6 +15,10 @@ providers:
 # agents:
 #   research-agent:
 #     api_keys: ["gvn_ra_xxxx"]
+#     loop_detection:
+#       threshold: 15        # identical calls before blocking (default: 10)
+#       window_seconds: 30   # time window to count calls (default: 60)
+#       cooldown_seconds: 600  # block duration after detection (default: 300)
 #   sales-bot:
 #     api_keys: ["gvn_sb_xxxx"]
 

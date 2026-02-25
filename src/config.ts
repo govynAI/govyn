@@ -8,7 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { ProxyConfig, ProviderConfig, AgentConfig, BudgetConfig } from './types.js';
+import type { ProxyConfig, ProviderConfig, AgentConfig, BudgetConfig, LoopDetectionConfig } from './types.js';
 import { loadPricing } from './pricing.js';
 
 /**
@@ -25,7 +25,14 @@ interface RawConfig {
     anthropic?: { base_url?: string; api_key_env?: string };
     custom?: Record<string, { base_url?: string; api_key_env?: string }>;
   };
-  agents?: Record<string, { api_keys?: string[] } | null>;
+  agents?: Record<string, {
+    api_keys?: string[];
+    loop_detection?: {
+      threshold?: number;
+      window_seconds?: number;
+      cooldown_seconds?: number;
+    };
+  } | null>;
   pricing?: Record<string, { input: number; output: number }>;
   budgets?: Record<string, {
     daily_limit?: number;
@@ -128,9 +135,22 @@ export function loadConfig(filePath?: string): ProxyConfig {
   for (const [agentName, agentDef] of Object.entries(rawAgents)) {
     if (typeof agentName !== 'string') continue;
     const apiKeys = agentDef?.api_keys ?? [];
+
+    // Parse per-agent loop detection config with defaults
+    let loopDetection: LoopDetectionConfig | undefined;
+    if (agentDef?.loop_detection) {
+      const ld = agentDef.loop_detection;
+      loopDetection = {
+        threshold: ld.threshold ?? 10,
+        windowSeconds: ld.window_seconds ?? 60,
+        cooldownSeconds: ld.cooldown_seconds ?? 300,
+      };
+    }
+
     agents.set(agentName, {
       name: agentName,
       apiKeys,
+      ...(loopDetection ? { loopDetection } : {}),
     });
   }
 

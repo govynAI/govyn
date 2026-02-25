@@ -99,34 +99,34 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHEMA-01 | — | Pending |
-| SCHEMA-02 | — | Pending |
-| SCHEMA-03 | — | Pending |
-| EVAL-01 | — | Pending |
-| EVAL-02 | — | Pending |
-| EVAL-03 | — | Pending |
-| EVAL-04 | — | Pending |
-| EVAL-05 | — | Pending |
-| RULE-01 | — | Pending |
-| RULE-02 | — | Pending |
-| RULE-03 | — | Pending |
-| RULE-04 | — | Pending |
-| RULE-05 | — | Pending |
-| RULE-06 | — | Pending |
-| RULE-07 | — | Pending |
-| RULE-08 | — | Pending |
-| RULE-09 | — | Pending |
-| RELOAD-01 | — | Pending |
-| RELOAD-02 | — | Pending |
-| CLI-01 | — | Pending |
-| TMPL-01 | — | Pending |
-| TMPL-02 | — | Pending |
+| SCHEMA-01 | Phase 6 | Pending |
+| SCHEMA-02 | Phase 6 | Pending |
+| SCHEMA-03 | Phase 6 | Pending |
+| EVAL-01 | Phase 6 | Pending |
+| EVAL-02 | Phase 6 | Pending |
+| EVAL-03 | Phase 6 | Pending |
+| EVAL-04 | Phase 6 | Pending |
+| EVAL-05 | Phase 6 | Pending |
+| RULE-01 | Phase 7 | Pending |
+| RULE-02 | Phase 7 | Pending |
+| RULE-03 | Phase 7 | Pending |
+| RULE-04 | Phase 7 | Pending |
+| RULE-05 | Phase 7 | Pending |
+| RULE-06 | Phase 8 | Pending |
+| RULE-07 | Phase 8 | Pending |
+| RULE-08 | Phase 8 | Pending |
+| RULE-09 | Phase 8 | Pending |
+| RELOAD-01 | Phase 9 | Pending |
+| RELOAD-02 | Phase 9 | Pending |
+| CLI-01 | Phase 9 | Pending |
+| TMPL-01 | Phase 9 | Pending |
+| TMPL-02 | Phase 9 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 22 total
-- Mapped to phases: 0
-- Unmapped: 22 ⚠️
+- Mapped to phases: 22 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-25*
-*Last updated: 2026-02-25 after initial definition*
+*Last updated: 2026-02-25 after roadmap mapping*

@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** Agents never hold real API keys. The proxy holds credentials and enforces governance at the infrastructure level — not the prompt level.
-**Current focus:** Phase 3 in progress — plan 1/2 complete (budget enforcement)
+**Current focus:** Phase 3 COMPLETE — advancing to Phase 4
 
 ## Current Position
 
-Phase: 3 of 18 (Budget Enforcement and Loop Detection) — IN PROGRESS
-Plan: 1 of 2 in current phase — COMPLETE
-Status: Phase 3 plan 01 complete — budget enforcement, events bus, /api/budgets API
-Last activity: 2026-02-25 — Completed plan 03-01 (budget enforcer, events bus, /api/budgets, 142 tests passing)
+Phase: 3 of 18 (Budget Enforcement and Loop Detection) — COMPLETE
+Plan: 2 of 2 in current phase — COMPLETE
+Status: Phase 3 complete — loop detection, cooldown, unblock API, budget reset, 173 tests passing
+Last activity: 2026-02-25 — Completed plan 03-02 (loop detection, block/unblock, integration tests)
 
-Progress: [████░░░░░░] 16%
+Progress: [████░░░░░░] 17%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 6 min
-- Total execution time: 0.40 hours
+- Total execution time: 0.60 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [████░░░░░░] 16%
 |-------|-------|-------|----------|
 | 01-proxy-server-foundation | 2/2 | 11 min | 6 min |
 | 02-agent-identification-cost-tracking | 2/2 | 11 min | 6 min |
-| 03-budget-enforcement-loop-detection | 1/2 | 6 min | 6 min |
+| 03-budget-enforcement-loop-detection | 2/2 | 12 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (4 min), 02-01 (4 min), 02-02 (7 min), 03-01 (6 min)
+- Last 5 plans: 02-01 (4 min), 02-02 (7 min), 03-01 (6 min), 03-02 (6 min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -65,6 +65,8 @@ Recent decisions affecting current work:
 - [Phase 03-budget-enforcement-loop-detection]: startServer() accepts BudgetEnforcer as optional third parameter — backward compatible, defaults to config.budgets-based enforcer
 - [Phase 03-budget-enforcement-loop-detection]: Soft limit warning delivered via BOTH X-Govyn-Budget-Warning response header AND internal govynEvents emission
 - [Phase 03-budget-enforcement-loop-detection]: govynEvents is a singleton EventEmitter — lightweight, no external dependencies, easy to consume
+- [Phase 03-budget-enforcement-loop-detection]: LoopDetector placed in proxy.ts forwardRequest() — body reading already happens there, cleanest integration point
+- [Phase 03-budget-enforcement-loop-detection]: Budget resets are implicit via CostAggregator time-windowed queries — no explicit reset timer needed
 
 ### Pending Todos
 
@@ -77,5 +79,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 03-01-PLAN.md — budget enforcement with hard/soft limits, govynEvents bus, /api/budgets status API (142 tests passing)
+Stopped at: Completed 03-02-PLAN.md — loop detection, block/unblock, unblock API, budget reset, 173 tests passing
 Resume file: None

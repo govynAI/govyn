@@ -22,7 +22,7 @@ Govyn is an API proxy that sits between AI agents and every tool/API they call, 
 
 - [x] **Phase 1: Proxy Server Foundation** - Transparent HTTP proxy with versioned routing, SSE streaming passthrough, and YAML configuration (completed 2026-02-24)
 - [x] **Phase 2: Agent Identification & Cost Tracking** - Per-agent identification, token counting, real-time cost calculation, and cost summary API (completed 2026-02-24)
-- [ ] **Phase 3: Budget Enforcement & Loop Detection** - Hard/soft budget limits per agent, loop detection, auto-kill, and budget reset logic
+- [x] **Phase 3: Budget Enforcement & Loop Detection** - Hard/soft budget limits per agent, loop detection, auto-kill, and budget reset logic (completed 2026-02-25)
 - [ ] **Phase 4: Action Logging** - Async structured JSON logging with metadata/full-payload modes, log rotation, and query API
 - [ ] **Phase 5: Packaging, Testing & Deployment** - Docker container, npm package, init wizard, CI pipeline, GDPR controls, and load testing
 
@@ -410,7 +410,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|-----------|----------------|--------|-----------|
 | 1. Proxy Server Foundation | 2/2 | Complete   | 2026-02-24 | - |
 | 2. Agent Identification & Cost Tracking | 2/2 | Complete    | 2026-02-24 | - |
-| 3. Budget Enforcement & Loop Detection | M1: Core Proxy MVP | 0/2 | Not started | - |
+| 3. Budget Enforcement & Loop Detection | 2/2 | Complete   | 2026-02-25 | - |
 | 4. Action Logging | M1: Core Proxy MVP | 0/2 | Not started | - |
 | 5. Packaging, Testing & Deployment | M1: Core Proxy MVP | 0/3 | Not started | - |
 | 6. Policy Definition & Parser | M2: Policy Engine | 0/2 | Not started | - |

@@ -36,9 +36,9 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **BUDG-01**: Per-agent daily and monthly budget limits configurable in YAML
 - [x] **BUDG-02**: Hard limit blocks calls when budget exceeded with clear JSON error response
 - [x] **BUDG-03**: Soft limit forwards request but emits warning event
-- [ ] **BUDG-04**: Loop detection blocks agent after N identical calls in M seconds (configurable)
-- [ ] **BUDG-05**: Auto-kill blocks looping agent for configurable cooldown period
-- [ ] **BUDG-06**: Budget resets at midnight UTC (daily) and month start (monthly)
+- [x] **BUDG-04**: Loop detection blocks agent after N identical calls in M seconds (configurable)
+- [x] **BUDG-05**: Auto-kill blocks looping agent for configurable cooldown period
+- [x] **BUDG-06**: Budget resets at midnight UTC (daily) and month start (monthly)
 - [x] **BUDG-07**: Budget status queryable via API
 
 ### Action Logging
@@ -234,9 +234,9 @@ Requirements for initial release. Each maps to roadmap phases.
 | BUDG-01 | Phase 3 | Complete |
 | BUDG-02 | Phase 3 | Complete |
 | BUDG-03 | Phase 3 | Complete |
-| BUDG-04 | Phase 3 | Pending |
-| BUDG-05 | Phase 3 | Pending |
-| BUDG-06 | Phase 3 | Pending |
+| BUDG-04 | Phase 3 | Complete |
+| BUDG-05 | Phase 3 | Complete |
+| BUDG-06 | Phase 3 | Complete |
 | BUDG-07 | Phase 3 | Complete |
 | LOGG-01 | Phase 4 | Pending |
 | LOGG-02 | Phase 4 | Pending |

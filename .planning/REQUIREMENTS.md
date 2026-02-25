@@ -33,13 +33,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Budget Enforcement & Loop Detection
 
-- [ ] **BUDG-01**: Per-agent daily and monthly budget limits configurable in YAML
-- [ ] **BUDG-02**: Hard limit blocks calls when budget exceeded with clear JSON error response
-- [ ] **BUDG-03**: Soft limit forwards request but emits warning event
+- [x] **BUDG-01**: Per-agent daily and monthly budget limits configurable in YAML
+- [x] **BUDG-02**: Hard limit blocks calls when budget exceeded with clear JSON error response
+- [x] **BUDG-03**: Soft limit forwards request but emits warning event
 - [ ] **BUDG-04**: Loop detection blocks agent after N identical calls in M seconds (configurable)
 - [ ] **BUDG-05**: Auto-kill blocks looping agent for configurable cooldown period
 - [ ] **BUDG-06**: Budget resets at midnight UTC (daily) and month start (monthly)
-- [ ] **BUDG-07**: Budget status queryable via API
+- [x] **BUDG-07**: Budget status queryable via API
 
 ### Action Logging
 
@@ -231,13 +231,13 @@ Requirements for initial release. Each maps to roadmap phases.
 | COST-06 | Phase 2 | Complete |
 | COST-07 | Phase 2 | Complete |
 | COST-08 | Phase 2 | Complete |
-| BUDG-01 | Phase 3 | Pending |
-| BUDG-02 | Phase 3 | Pending |
-| BUDG-03 | Phase 3 | Pending |
+| BUDG-01 | Phase 3 | Complete |
+| BUDG-02 | Phase 3 | Complete |
+| BUDG-03 | Phase 3 | Complete |
 | BUDG-04 | Phase 3 | Pending |
 | BUDG-05 | Phase 3 | Pending |
 | BUDG-06 | Phase 3 | Pending |
-| BUDG-07 | Phase 3 | Pending |
+| BUDG-07 | Phase 3 | Complete |
 | LOGG-01 | Phase 4 | Pending |
 | LOGG-02 | Phase 4 | Pending |
 | LOGG-03 | Phase 4 | Pending |

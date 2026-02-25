@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** Agents never hold real API keys. The proxy holds credentials and enforces governance at the infrastructure level — not the prompt level.
-**Current focus:** Phase 2 complete — ready for Phase 3
+**Current focus:** Phase 3 in progress — plan 1/2 complete (budget enforcement)
 
 ## Current Position
 
-Phase: 2 of 18 (Agent Identification and Cost Tracking) — COMPLETE
-Plan: 2 of 2 in current phase — COMPLETE
-Status: Phase 2 all plans complete
-Last activity: 2026-02-24 — Completed plan 02-02 (cost aggregator, cost API, proxy pipeline wiring)
+Phase: 3 of 18 (Budget Enforcement and Loop Detection) — IN PROGRESS
+Plan: 1 of 2 in current phase — COMPLETE
+Status: Phase 3 plan 01 complete — budget enforcement, events bus, /api/budgets API
+Last activity: 2026-02-25 — Completed plan 03-01 (budget enforcer, events bus, /api/budgets, 142 tests passing)
 
-Progress: [███░░░░░░░] 11%
+Progress: [████░░░░░░] 16%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 5 min
-- Total execution time: 0.34 hours
+- Total plans completed: 5
+- Average duration: 6 min
+- Total execution time: 0.40 hours
 
 **By Phase:**
 
@@ -29,9 +29,10 @@ Progress: [███░░░░░░░] 11%
 |-------|-------|-------|----------|
 | 01-proxy-server-foundation | 2/2 | 11 min | 6 min |
 | 02-agent-identification-cost-tracking | 2/2 | 11 min | 6 min |
+| 03-budget-enforcement-loop-detection | 1/2 | 6 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (7 min), 01-02 (4 min), 02-01 (4 min), 02-02 (7 min)
+- Last 5 plans: 01-02 (4 min), 02-01 (4 min), 02-02 (7 min), 03-01 (6 min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -60,6 +61,10 @@ Recent decisions affecting current work:
 - [Phase 02]: Non-blocking cost recording: cost is recorded after response delivery via stream end event — zero latency impact on client
 - [Phase 02]: startServer() accepts CostAggregator explicitly via dependency injection — no global state, single shared aggregator
 - [Phase 02]: Flat record array with query-time filter for cost aggregation — simpler than pre-bucketed windows, sufficient for Phase 2 in-memory scale
+- [Phase 03-budget-enforcement-loop-detection]: BudgetEnforcer uses CostAggregator.getSummary() for spend queries — no separate spend tracking, reuses existing aggregation
+- [Phase 03-budget-enforcement-loop-detection]: startServer() accepts BudgetEnforcer as optional third parameter — backward compatible, defaults to config.budgets-based enforcer
+- [Phase 03-budget-enforcement-loop-detection]: Soft limit warning delivered via BOTH X-Govyn-Budget-Warning response header AND internal govynEvents emission
+- [Phase 03-budget-enforcement-loop-detection]: govynEvents is a singleton EventEmitter — lightweight, no external dependencies, easy to consume
 
 ### Pending Todos
 
@@ -71,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-24
-Stopped at: Completed 02-02-PLAN.md — cost aggregator, cost API endpoint, full proxy pipeline with cost tracking (28 new tests, 113 total passing)
+Last session: 2026-02-25
+Stopped at: Completed 03-01-PLAN.md — budget enforcement with hard/soft limits, govynEvents bus, /api/budgets status API (142 tests passing)
 Resume file: None

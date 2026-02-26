@@ -4,25 +4,13 @@
 
 An API proxy that sits between AI agents and every tool/API they call, enforcing policies, tracking costs, logging actions, and enabling replay — so agents physically cannot bypass governance rules. Open-source proxy core with a SaaS dashboard for teams deploying AI agents in production.
 
-Shipped v1.0: transparent HTTP proxy with per-agent cost tracking, budget enforcement, loop detection, structured logging, Docker + npm packaging, and 337 passing tests.
+Shipped v1.0: transparent HTTP proxy with per-agent cost tracking, budget enforcement, loop detection, structured logging, Docker + npm packaging.
+
+Shipped v1.1: YAML policy-as-code engine with 6 rule types (block, rate_limit, budget_limit, content_filter, time_window, model_route), in-memory evaluation (<5ms for 100 policies), hot reload, CLI validation, and 11 pre-built templates.
 
 ## Core Value
 
 Agents never hold real API keys. The proxy holds credentials and enforces governance at the infrastructure level — not the prompt level. If the proxy blocks an action, the agent has no alternative path to the real API.
-
-## Current Milestone: v1.1 Policy Engine
-
-**Goal:** YAML-based policy-as-code engine evaluated in-memory on every proxied request — block, rate-limit, content-filter, time-window, and model-route enforcement with hot-reload and pre-built templates.
-
-**Target features:**
-- YAML policy schema with versioned format (block, rate_limit, budget_limit, content_filter, time_window, model_route)
-- Policy scoping hierarchy: global → per-agent → per-target-API, most restrictive wins
-- In-memory synchronous evaluation (<5ms for 100 policies)
-- Hot-reload: file watch, <1s pickup, no restart required
-- `govyn policy validate` CLI command with schema error reporting
-- 10+ pre-built policy templates (production-safety, budget-control, pii-protection, business-hours-only, read-only-mode, emergency-lockdown, etc.)
-- Standardized 403 error contract with policy name + reason
-- model_route policy type: rewrite model field before forwarding (ADR-021)
 
 ## Requirements
 
@@ -38,14 +26,17 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 - ✓ YAML configuration for proxy settings, providers, agents, budgets — v1.0
 - ✓ Docker container and npm package deployment — v1.0
 - ✓ Versioned API: /v1/openai/*, /v1/anthropic/*, /v1/custom/:name/* — v1.0
-- ✓ CLI tool (govyn init) — v1.0 (partial: init wizard shipped, policy/status/replay commands in later milestones)
+- ✓ CLI tool (govyn init) — v1.0
+- ✓ YAML policy-as-code engine with block, rate_limit, budget_limit, content_filter, time_window, model_route rules — v1.1
+- ✓ In-memory policy evaluation (<5ms for 100 policies) with scoping hierarchy (global → agent → target) — v1.1
+- ✓ Smart model routing with criteria matching, provider-aware aliases, safeguards, and dual-model cost tracking — v1.1
+- ✓ Hot reload: file-watch with <1s detection, atomic policy swap, invalid-change rejection — v1.1
+- ✓ `govyn policy validate` CLI command with line-number error reporting — v1.1
+- ✓ 11 pre-built policy templates (production-safety, budget-control, pii-protection, business-hours-only, etc.) — v1.1
 
 ### Active
 
-- [ ] YAML-based policy-as-code engine with block, require_approval, rate_limit, budget_limit, content_filter, time_window rules
-- [ ] In-memory policy evaluation (<5ms) with hot-reload
 - [ ] Human-in-the-loop approval queue (async pattern, HTTP 202 + polling)
-- [ ] Policy templates library (10+ pre-built scenarios)
 - [ ] React + TypeScript + Tailwind dashboard with Clerk auth
 - [ ] Cost overview, per-agent drill-down, budget status indicators
 - [ ] Policy management UI (list, editor, dry-run testing, version history)
@@ -70,7 +61,7 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 
 ## Context
 
-**Current state:** Shipped v1.0 Core Proxy MVP with 15,401 LOC TypeScript. Tech stack: Node.js/TypeScript proxy, Vitest, YAML config. Docker + npm packaging. 337 tests (unit, integration, load). p95 latency ~88-101ms at 100 concurrent (per-request overhead <5ms).
+**Current state:** Shipped v1.1 Policy Engine with 23,696 LOC TypeScript. Tech stack: Node.js/TypeScript proxy, Vitest, YAML config. Docker + npm packaging. 531 tests (unit, integration, load). Policy engine evaluates 6 rule types in-memory with <5ms for 100 policies. Hot reload detects file changes in <1s. 11 pre-built policy templates. `govyn policy validate` CLI command.
 
 **Market position:** No proxy-architecture governance product exists for non-enterprise teams. All direct competitors (AgentBudget, TealTiger, AgentGuard47, Coralogix, AgentOps) use SDK/wrapper models where real API keys remain in the agent's environment. The proxy model is architecturally unbypassable — "a wall, not a door lock."
 
@@ -104,18 +95,22 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 | Fail-open default | Being a SPOF is biggest adoption blocker; fail-open means our bugs don't cause customer outages (ADR-002) | ✓ Good — unknown models return "unpriced" not errors |
 | Open-source proxy, SaaS dashboard | Trust through transparency; monetize via dashboard following Sentry/PostHog model (ADR-003) | — Pending (dashboard not yet built) |
 | Dual key mode (storage vs. passthrough) | Passthrough removes trust barrier; key storage for maximum enforcement; conversion path between them (ADR-019) | — Pending |
-| YAML policy format | Human-readable, diff-friendly, version-controllable; dashboard provides visual editor (ADR-008) | ✓ Good — YAML config validated in v1.0, policy YAML in v1.1 |
-| In-memory policy evaluation | <5ms on hot path; DB only for persistence and dashboard reads (ADR-006) | — Pending (policy engine in v1.1) |
+| YAML policy format | Human-readable, diff-friendly, version-controllable; dashboard provides visual editor (ADR-008) | ✓ Good — YAML config validated in v1.0, policy engine shipped in v1.1 with strict parser and line-number errors |
+| In-memory policy evaluation | <5ms on hot path; DB only for persistence and dashboard reads (ADR-006) | ✓ Good — 100 policies in <5ms, synchronous evaluation on every request |
 | Async logging, never block hot path | Latency is #1 concern for proxy; losing a log entry acceptable, adding latency is not (ADR-007) | ✓ Good — 0ms added latency, async flush on 1s interval |
 | Cloudflare Workers for cloud proxy | Edge execution (300+ locations), native streaming support, minimal network hop (ADR-011) | — Pending |
-| PostgreSQL via Neon | Handles structured queries, JSONB for flexible schemas, time-series for cost aggregation (ADR-012) | — Pending (dashboard in M3) |
-| Async approval queue (HTTP 202 + polling) | CF Workers can't hold connections; pattern works across all deployment models (ADR-017) | — Pending (approval queue in v1.1) |
+| PostgreSQL via Neon | Handles structured queries, JSONB for flexible schemas, time-series for cost aggregation (ADR-012) | — Pending (dashboard in v1.2) |
+| Async approval queue (HTTP 202 + polling) | CF Workers can't hold connections; pattern works across all deployment models (ADR-017) | — Pending (approval queue in v1.2) |
 | Customer holds own API keys (default) | "Give a startup my API keys" is non-starter; passthrough mode forwards without storing (ADR-004, ADR-019) | ✓ Good — env var keys, never written to config |
-| Versioned API and policy schema | Customers depend on proxy contract for production agents; breaking changes need migration path (ADR-018) | ✓ Good — /v1/ prefix established |
+| Versioned API and policy schema | Customers depend on proxy contract for production agents; breaking changes need migration path (ADR-018) | ✓ Good — /v1/ prefix established, policy schema version: 1 |
 | No crypto/blockchain | Enterprise/SMB want standard Stripe billing; crypto infra is early and niche (ADR-015) | ✓ Good — no demand signal |
-| Node.js http module (no frameworks) | Zero-dependency proxy forwarding for minimum latency (ADR-013) | ✓ Good — proven in v1.0 load tests |
-| Real HTTP server pairs for testing | More reliable than mocked sockets, catches real integration issues | ✓ Good — 337 tests passing |
-| In-memory cost aggregation with flat records | Simple query-time filtering, sufficient for single-node proxy scale | ✓ Good — works for v1.0, DB aggregation deferred to dashboard |
+| Node.js http module (no frameworks) | Zero-dependency proxy forwarding for minimum latency (ADR-013) | ✓ Good — proven in v1.0 and v1.1 load tests |
+| Real HTTP server pairs for testing | More reliable than mocked sockets, catches real integration issues | ✓ Good — 531 tests passing |
+| In-memory cost aggregation with flat records | Simple query-time filtering, sufficient for single-node proxy scale | ✓ Good — works for v1.0/v1.1, DB aggregation deferred to dashboard |
+| yaml parseDocument() for source maps | Line-number error reporting requires AST access, not just parsed values | ✓ Good — parser reports exact YAML line numbers for errors |
+| fs.watch() over chokidar/fs.watchFile | Event-driven sub-second detection with zero dependencies | ✓ Good — <1s reload, handles cross-OS editor quirks |
+| Model route never denies | Routing is optimization, not enforcement — always allowed:true, routes or passes through | ✓ Good — clean separation from deny-type policies |
+| Token estimation via chars/4 | No external tokenizer dependency; sufficient accuracy for routing criteria | ✓ Good — simple, fast, no dependency |
 
 ---
-*Last updated: 2026-02-25 after v1.1 milestone start*
+*Last updated: 2026-02-26 after v1.1 milestone*

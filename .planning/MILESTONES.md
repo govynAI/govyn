@@ -23,3 +23,28 @@
 
 ---
 
+
+## v1.1 Policy Engine (Shipped: 2026-02-26)
+
+**Phases completed:** 6 phases, 12 plans, 25 tasks
+**Timeline:** 1 day (2026-02-25 → 2026-02-26)
+**Codebase:** 23,696 LOC TypeScript, 31 files changed (+7,660 lines), 531 tests passing
+**Git range:** b2861c9 → 47d1e7a
+
+**Delivered:** A YAML policy-as-code engine evaluated in-memory on every proxied request — block, rate-limit, budget-limit, content-filter, time-window, and model-route enforcement with hot-reload, CLI validation, and 11 pre-built templates.
+
+**Key accomplishments:**
+- YAML policy-as-code engine with strict parser, line-number error reporting, and 6 policy types (block, rate_limit, budget_limit, content_filter, time_window, model_route)
+- In-memory synchronous evaluation with scoping hierarchy (global → agent → target), most-restrictive-wins precedence, <5ms for 100 policies
+- Smart model routing with 10 criteria matchers, provider-aware aliases (cheap/standard/premium), safeguards (max_downgrade_level, per-agent opt-out), and dual-model cost tracking
+- Hot reload via fs.watch with <1s detection, debounced atomic policy swap, and invalid-change rejection
+- `govyn policy validate` CLI command with line-number error reporting and 11 pre-built policy templates (production-safety, budget-control, pii-protection, business-hours-only, etc.)
+- 3 milestone audits with 2 gap-closure phases (7.1, 9.1) resolving all integration bugs and tech debt
+
+**Archives:**
+- [v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
+- [v1.1-REQUIREMENTS.md](milestones/v1.1-REQUIREMENTS.md)
+- [v1.1-MILESTONE-AUDIT.md](milestones/v1.1-MILESTONE-AUDIT.md)
+
+---
+

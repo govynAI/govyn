@@ -34,14 +34,17 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 - ✓ `govyn policy validate` CLI command with line-number error reporting — v1.1
 - ✓ 11 pre-built policy templates (production-safety, budget-control, pii-protection, business-hours-only, etc.) — v1.1
 
-### Active
+### Active (v1.2)
 
-- [ ] Human-in-the-loop approval queue (async pattern, HTTP 202 + polling)
-- [ ] React + TypeScript + Tailwind dashboard with Clerk auth
-- [ ] Cost overview, per-agent drill-down, budget status indicators
-- [ ] Policy management UI (list, editor, dry-run testing, version history)
-- [ ] Approval queue UI with approve/deny/notes
+- [ ] React + TypeScript + Tailwind dashboard as separate app with Clerk auth
+- [ ] PostgreSQL persistence via Neon (proxy writes cost/log/policy data to DB)
+- [ ] Cost overview with per-agent drill-down, budget status indicators, time-series charts
+- [ ] Policy management UI (list, visual editor, dry-run testing, version history)
+- [ ] Human-in-the-loop approval queue — full stack (proxy HTTP 202 + polling backend + dashboard approve/deny/notes UI)
 - [ ] Alert configuration (email/webhook on budget thresholds, policy triggers)
+
+### Future
+
 - [ ] Stripe billing integration (Starter $29, Team $99, Enterprise $299)
 - [ ] Session replay with step-through and comparison views
 - [ ] Anomaly detection (cost spikes, error loops, deviation alerting)
@@ -58,6 +61,18 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 - Crypto/blockchain payment rails — enterprise and SMB customers want standard Stripe billing (ADR-015)
 - Native mobile apps — web dashboard first
 - Competing with Agentgateway/Solo.io on Kubernetes/MCP/A2A enterprise infrastructure — different buyer, different stack, different price point
+
+## Current Milestone: v1.2 Dashboard & Governance Platform
+
+**Goal:** Turn Govyn from a CLI-only proxy into a visual governance platform where both devs and team leads can monitor costs, manage policies, approve agent actions, and configure alerts.
+
+**Target features:**
+- Separate React + TypeScript + Tailwind dashboard with Clerk auth
+- PostgreSQL (Neon) persistence — proxy writes cost/log/policy data
+- Cost overview with per-agent drill-down, budget status, time-series charts
+- Policy management UI with visual editor, dry-run testing, version history
+- Approval queue full stack — proxy HTTP 202 + polling, dashboard approve/deny/notes
+- Alert configuration — email/webhook on budget thresholds and policy triggers
 
 ## Context
 
@@ -113,4 +128,4 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 | Token estimation via chars/4 | No external tokenizer dependency; sufficient accuracy for routing criteria | ✓ Good — simple, fast, no dependency |
 
 ---
-*Last updated: 2026-02-26 after v1.1 milestone*
+*Last updated: 2026-02-26 after v1.2 milestone start*

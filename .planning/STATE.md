@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Agents never hold real API keys. The proxy holds credentials and enforces governance at the infrastructure level — not the prompt level.
-**Current focus:** v1.1 complete — planning next milestone
+**Current focus:** v1.2 Dashboard & Governance Platform
 
 ## Current Position
 
-Phase: v1.1 milestone complete
-Plan: All 23 plans complete (12 v1.0 + 12 v1.1, minus 1 plan counted in Phase 9)
-Status: v1.1 Policy Engine shipped. 531 tests passing. 23,696 LOC TypeScript.
-Last activity: 2026-02-26 — Completed v1.1 milestone
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-26 — Milestone v1.2 started
 
 ## Performance Metrics
 

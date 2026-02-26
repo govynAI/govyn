@@ -103,37 +103,37 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| DASH-04 | — | Pending |
-| DATA-01 | — | Pending |
-| DATA-02 | — | Pending |
-| DATA-03 | — | Pending |
-| COST-01 | — | Pending |
-| COST-02 | — | Pending |
-| COST-03 | — | Pending |
-| COST-04 | — | Pending |
-| PLCY-01 | — | Pending |
-| PLCY-02 | — | Pending |
-| PLCY-03 | — | Pending |
-| PLCY-04 | — | Pending |
-| APRV-01 | — | Pending |
-| APRV-02 | — | Pending |
-| APRV-03 | — | Pending |
-| APRV-04 | — | Pending |
-| APRV-05 | — | Pending |
-| APRV-06 | — | Pending |
-| ALRT-01 | — | Pending |
-| ALRT-02 | — | Pending |
-| ALRT-03 | — | Pending |
-| ALRT-04 | — | Pending |
+| DASH-01 | Phase 11 | Pending |
+| DASH-02 | Phase 11 | Pending |
+| DASH-03 | Phase 11 | Pending |
+| DASH-04 | Phase 11 | Pending |
+| DATA-01 | Phase 10 | Pending |
+| DATA-02 | Phase 10 | Pending |
+| DATA-03 | Phase 10 | Pending |
+| COST-01 | Phase 12 | Pending |
+| COST-02 | Phase 12 | Pending |
+| COST-03 | Phase 12 | Pending |
+| COST-04 | Phase 12 | Pending |
+| PLCY-01 | Phase 13 | Pending |
+| PLCY-02 | Phase 13 | Pending |
+| PLCY-03 | Phase 13 | Pending |
+| PLCY-04 | Phase 13 | Pending |
+| APRV-01 | Phase 10 | Pending |
+| APRV-02 | Phase 10 | Pending |
+| APRV-03 | Phase 14 | Pending |
+| APRV-04 | Phase 14 | Pending |
+| APRV-05 | Phase 14 | Pending |
+| APRV-06 | Phase 14 | Pending |
+| ALRT-01 | Phase 15 | Pending |
+| ALRT-02 | Phase 15 | Pending |
+| ALRT-03 | Phase 15 | Pending |
+| ALRT-04 | Phase 15 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 25 total
-- Mapped to phases: 0
-- Unmapped: 25
+- Mapped to phases: 25
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-02-26 after initial definition*
+*Last updated: 2026-02-26 after roadmap creation*

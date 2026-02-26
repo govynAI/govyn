@@ -5,14 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Agents never hold real API keys. The proxy holds credentials and enforces governance at the infrastructure level — not the prompt level.
-**Current focus:** v1.2 Dashboard & Governance Platform
+**Current focus:** Phase 10 — Data Persistence & Proxy API
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-26 — Milestone v1.2 started
+Phase: 10 of 15 (Data Persistence & Proxy API)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-02-26 — v1.2 roadmap created (6 phases, 25 requirements)
+
+Progress: [██████████████████░░░░░░░░░░░░] 61% (23/~37 plans lifetime)
 
 ## Performance Metrics
 
@@ -45,6 +47,13 @@ Last activity: 2026-02-26 — Milestone v1.2 started
 
 Cleared at milestone boundary. Full decision history in PROJECT.md Key Decisions table and milestone archives.
 
+v1.2 architectural decisions:
+- Dashboard is a separate React app, not embedded in proxy (ADR-010)
+- PostgreSQL via Neon for persistence (ADR-012)
+- Clerk auth for dashboard
+- Approval queue uses HTTP 202 + polling pattern (ADR-017)
+- Alerts via webhook only (no email in v1.2)
+
 ### Pending Todos
 
 None.
@@ -56,5 +65,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed v1.1 milestone archival.
+Stopped at: Created v1.2 roadmap (6 phases, 25 requirements mapped).
 Resume file: None

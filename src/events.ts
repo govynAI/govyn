@@ -28,7 +28,46 @@ export type GovynEvent =
       currentSpend: number;
       resetTime: string;
     }
-  | { type: 'loop_detected'; agentId: string; cooldownSeconds: number };
+  | { type: 'loop_detected'; agentId: string; cooldownSeconds: number }
+  | {
+      type: 'policy_enforced';
+      agentId: string;
+      provider: string;
+      path: string;
+      policyCount: number;
+      evaluationTimeMs: number;
+      allowed: true;
+    }
+  | {
+      type: 'policy_denied';
+      agentId: string;
+      provider: string;
+      path: string;
+      policyName: string;
+      policyType: string;
+      reason: string;
+      evaluationTimeMs: number;
+      allowed: false;
+    }
+  | {
+      type: 'model_routed';
+      agentId: string;
+      provider: string;
+      requestedModel: string;
+      actualModel: string;
+      policyName: string;
+      matchedRuleIndex?: number;
+    }
+  | {
+      type: 'policy_reloaded';
+      filePath: string;
+      policyCount: number;
+    }
+  | {
+      type: 'policy_reload_failed';
+      filePath: string;
+      error: string;
+    };
 
 /** Singleton event bus — consumers subscribe via govynEvents.on('event', cb) */
 export const govynEvents = new EventEmitter();

@@ -1,0 +1,109 @@
+# Smart Model Routing — Route to Cheaper Models for Simple Tasks
+#
+# THE SHOWCASE TEMPLATE: Typically saves 40-70% on LLM costs by routing
+# simple tasks to cheaper models while keeping complex tasks on premium models.
+#
+# This template includes pre-configured tiers for both Anthropic and OpenAI:
+#   - Anthropic: Haiku (cheap) / Sonnet (standard) / Opus (premium)
+#   - OpenAI: GPT-4o-mini (cheap) / GPT-4o (standard/premium)
+#
+# Rules are evaluated in priority order (first match wins):
+#   1. Short prompts (<500 tokens) -> cheap model
+#   2. Simple task keywords (summarize, translate, format, extract) -> cheap model
+#   3. Tool/function calls present -> standard model (needs reliability)
+#   4. Long/complex prompts (>4000 tokens) -> standard model
+#   5. Default: passthrough (keep original model)
+#
+# Customization:
+#   - Adjust token thresholds (input_tokens_estimate) for your workload
+#   - Add/remove keywords in system_prompt_contains lists
+#   - Change model_aliases to use different models
+#   - Set max_downgrade_level to prevent routing below a tier
+#   - Add agents to routing_opt_out_agents to skip routing for specific agents
+
+version: 1
+policies:
+  - name: anthropic-model-routing
+    description: Smart routing for Anthropic models — route simple tasks to Haiku, complex to Sonnet
+    type: model_route
+    enabled: true
+    scope: "target:anthropic"
+    model_aliases:
+      cheap: "claude-haiku-4-20250514"
+      standard: "claude-sonnet-4-20250514"
+      premium: "claude-opus-4-0520"
+    max_downgrade_level: standard
+    rules:
+      # Rule 1: Short prompts -> cheap (Haiku)
+      - when:
+          input_tokens_estimate: "<500"
+        route_to: cheap
+
+      # Rule 2: Simple task keywords in system prompt -> cheap (Haiku)
+      - when:
+          system_prompt_contains:
+            - summarize
+            - translate
+            - format
+            - extract
+          no_user_prompt_contains:
+            - analyze
+            - reason
+            - "explain in detail"
+            - compare
+        route_to: cheap
+
+      # Rule 3: Tool calls present -> standard (Sonnet, needs function calling reliability)
+      - when:
+          tool_calls_present: true
+        route_to: standard
+
+      # Rule 4: Long prompts (>4000 tokens) -> standard (complex but not premium-worthy)
+      - when:
+          input_tokens_estimate: ">4000"
+        route_to: standard
+
+      # Rule 5: Default passthrough (keeps original model)
+      - default: passthrough
+
+  - name: openai-model-routing
+    description: Smart routing for OpenAI models — route simple tasks to GPT-4o-mini
+    type: model_route
+    enabled: true
+    scope: "target:openai"
+    model_aliases:
+      cheap: "gpt-4o-mini"
+      standard: "gpt-4o"
+      premium: "gpt-4o"
+    rules:
+      # Rule 1: Short prompts -> cheap (GPT-4o-mini)
+      - when:
+          input_tokens_estimate: "<500"
+        route_to: cheap
+
+      # Rule 2: Simple task keywords -> cheap (GPT-4o-mini)
+      - when:
+          system_prompt_contains:
+            - summarize
+            - translate
+            - format
+            - extract
+          no_user_prompt_contains:
+            - analyze
+            - reason
+            - "explain in detail"
+            - compare
+        route_to: cheap
+
+      # Rule 3: Tool calls present -> standard (GPT-4o)
+      - when:
+          tool_calls_present: true
+        route_to: standard
+
+      # Rule 4: Long prompts -> standard (GPT-4o)
+      - when:
+          input_tokens_estimate: ">4000"
+        route_to: standard
+
+      # Rule 5: Default passthrough
+      - default: passthrough

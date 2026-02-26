@@ -1,0 +1,32 @@
+# PII Protection — Block Sensitive Data in Requests
+#
+# Use this template to prevent agents from sending personally
+# identifiable information (PII) through the proxy. Uses built-in
+# pattern names for common PII types.
+#
+# Built-in patterns:
+#   - ssn: Social Security Numbers (XXX-XX-XXXX)
+#   - credit_card: Credit card numbers (16 digits with optional separators)
+#   - email: Email addresses
+#   - phone: Phone numbers (US format with optional country code)
+#
+# Customization:
+#   - Remove patterns you don't need from the list
+#   - Add custom regex strings for domain-specific patterns:
+#       patterns: [ssn, credit_card, "CUSTOM-\\d{6}"]
+#   - Set reveal_pattern: true to include matched pattern name in error messages
+#     (useful for debugging, not recommended in production)
+
+version: 1
+policies:
+  - name: pii-content-filter
+    description: Block requests containing PII (SSN, credit card, email, phone)
+    type: content_filter
+    enabled: true
+    scope: global
+    patterns:
+      - ssn
+      - credit_card
+      - email
+      - phone
+    reveal_pattern: false

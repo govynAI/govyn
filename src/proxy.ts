@@ -144,6 +144,9 @@ export async function forwardRequest(
   loopDetector?: LoopDetector,
   budgetEnforcer?: BudgetEnforcer,
   actionLogger?: ActionLogger,
+  bufferedBody?: Buffer,
+  requestedModel?: string,
+  policyResult?: { allowed: boolean; evaluatedCount: number; matchedCount: number; evaluationTimeMs: number },
 ): Promise<void> {
   const requestStart = Date.now();
   const { provider, upstreamPath } = routeMatch;
@@ -170,20 +173,25 @@ export async function forwardRequest(
   // Map headers for the upstream provider
   const mappedHeaders = mapHeaders(req.headers, routeMatch);
 
-  // Read request body
-  const bodyChunks: Buffer[] = [];
-  try {
-    await new Promise<void>((resolve, reject) => {
-      req.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
-      req.on('end', resolve);
-      req.on('error', reject);
-    });
-  } catch {
-    sendErrorResponse(res, 500, 'Error reading request body', 'request_read_error');
-    return;
+  // Use pre-buffered body if provided (from server.ts policy evaluation flow),
+  // otherwise read from the request stream directly (backward compat)
+  let body: Buffer;
+  if (bufferedBody !== undefined) {
+    body = bufferedBody;
+  } else {
+    const bodyChunks: Buffer[] = [];
+    try {
+      await new Promise<void>((resolve, reject) => {
+        req.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
+        req.on('end', resolve);
+        req.on('error', reject);
+      });
+    } catch {
+      sendErrorResponse(res, 500, 'Error reading request body', 'request_read_error');
+      return;
+    }
+    body = Buffer.concat(bodyChunks);
   }
-
-  const body = Buffer.concat(bodyChunks);
 
   // Loop detection: check for repeated identical requests before forwarding
   if (loopDetector && budgetEnforcer) {
@@ -317,6 +325,7 @@ export async function forwardRequest(
               totalCost: costResult.totalCost,
               priced: costResult.priced,
               timestamp: Date.now(),
+              requestedModel: requestedModel ?? undefined,
             });
             const totalTokens = usage.inputTokens + usage.outputTokens;
             console.log(
@@ -346,6 +355,14 @@ export async function forwardRequest(
               has_payload: payloadId !== null,
               payload_id: payloadId,
               storage_region: 'auto',
+              requested_model: requestedModel ?? null,
+              actual_model: usage?.model ?? null,
+              policy_result: policyResult ? {
+                allowed: policyResult.allowed,
+                evaluated_count: policyResult.evaluatedCount,
+                matched_count: policyResult.matchedCount,
+                evaluation_time_ms: policyResult.evaluationTimeMs,
+              } : undefined,
             };
 
             actionLogger.log(logEntry);
@@ -397,6 +414,7 @@ export async function forwardRequest(
               totalCost: costResult.totalCost,
               priced: costResult.priced,
               timestamp: Date.now(),
+              requestedModel: requestedModel ?? undefined,
             });
             const totalTokens = usage.inputTokens + usage.outputTokens;
             console.log(
@@ -426,6 +444,14 @@ export async function forwardRequest(
               has_payload: payloadId !== null,
               payload_id: payloadId,
               storage_region: 'auto',
+              requested_model: requestedModel ?? null,
+              actual_model: usage?.model ?? null,
+              policy_result: policyResult ? {
+                allowed: policyResult.allowed,
+                evaluated_count: policyResult.evaluatedCount,
+                matched_count: policyResult.matchedCount,
+                evaluation_time_ms: policyResult.evaluationTimeMs,
+              } : undefined,
             };
 
             actionLogger.log(logEntry);

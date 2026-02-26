@@ -1,0 +1,26 @@
+# Standard Rate Limiting — 10 Requests per Minute
+#
+# Use this template to enforce a standard rate limit on agent API requests.
+# Limits each agent to 10 requests per 60-second sliding window.
+#
+# Customization:
+#   - Adjust limit and window_seconds for your workload:
+#       limit: 30
+#       window_seconds: 60
+#   - Change scope to per-agent for different limits per agent:
+#       scope: "agent:my-agent"
+#   - Add additional rate limit policies for different tiers:
+#       - name: premium-rate-limit
+#         scope: "agent:premium-agent"
+#         limit: 100
+#         window_seconds: 60
+
+version: 1
+policies:
+  - name: standard-rate-limit
+    description: Limit each agent to 10 requests per 60 seconds
+    type: rate_limit
+    enabled: true
+    scope: global
+    limit: 10
+    window_seconds: 60

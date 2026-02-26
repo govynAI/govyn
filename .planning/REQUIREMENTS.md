@@ -9,43 +9,43 @@ Requirements for the Policy Engine milestone. Each maps to roadmap phases.
 
 ### Schema — Policy Schema & Configuration
 
-- [ ] **SCHEMA-01**: User can define policies in versioned YAML format with a `policies` section
-- [ ] **SCHEMA-02**: Policy schema is validated strictly with helpful error messages including line numbers
-- [ ] **SCHEMA-03**: Six policy types supported: block, rate_limit, budget_limit, content_filter, time_window, model_route
+- [x] **SCHEMA-01**: User can define policies in versioned YAML format with a `policies` section
+- [x] **SCHEMA-02**: Policy schema is validated strictly with helpful error messages including line numbers
+- [x] **SCHEMA-03**: Six policy types supported: block, rate_limit, budget_limit, content_filter, time_window, model_route
 
 ### Eval — Policy Evaluation Engine
 
-- [ ] **EVAL-01**: Policy engine evaluates all matching policies synchronously on every proxied request
-- [ ] **EVAL-02**: 100 active policies evaluate in <5ms (synchronous, no I/O on hot path)
-- [ ] **EVAL-03**: Policies scope to global, per-agent, or per-target-API with most-restrictive-wins precedence
-- [ ] **EVAL-04**: Blocked requests return standardized 403 error with policy name, type, and human-readable reason
-- [ ] **EVAL-05**: Policy enforcement events emitted via existing event system and included in action log entries
+- [x] **EVAL-01**: Policy engine evaluates all matching policies synchronously on every proxied request
+- [x] **EVAL-02**: 100 active policies evaluate in <5ms (synchronous, no I/O on hot path)
+- [x] **EVAL-03**: Policies scope to global, per-agent, or per-target-API with most-restrictive-wins precedence
+- [x] **EVAL-04**: Blocked requests return standardized 403 error with policy name, type, and human-readable reason
+- [x] **EVAL-05**: Policy enforcement events emitted via existing event system and included in action log entries
 
 ### Rule — Policy Rule Types
 
-- [ ] **RULE-01**: Block policy denies requests matching configurable criteria: regex patterns on request body/headers, target API provider/endpoint, and action type classification
-- [ ] **RULE-02**: Rate limit policy enforces per-agent sliding window call limits with configurable window and threshold
-- [ ] **RULE-03**: Budget limit policy enforces spending limits within policy scoping (complementing existing budget enforcer)
-- [ ] **RULE-04**: Content filter policy blocks requests containing sensitive patterns (SSN, credit card, configurable PII regex)
-- [ ] **RULE-05**: Time window policy restricts API access to configured time periods (e.g., 09:00-17:00 UTC)
-- [ ] **RULE-06**: Model route policy rewrites model field based on configurable criteria (token estimate, prompt keywords, agent ID, time of day, tool call presence, conversation turns)
-- [ ] **RULE-07**: Model aliases map abstract tiers (cheap/standard/premium) to provider-specific model strings
-- [ ] **RULE-08**: Model route safeguards: passthrough default when no rule matches, max_downgrade_level, per-agent routing opt-out
-- [ ] **RULE-09**: Cost tracking logs both requested_model and actual_model for model-routed requests
+- [x] **RULE-01**: Block policy denies requests matching configurable criteria: regex patterns on request body/headers, target API provider/endpoint, and action type classification
+- [x] **RULE-02**: Rate limit policy enforces per-agent sliding window call limits with configurable window and threshold
+- [x] **RULE-03**: Budget limit policy enforces spending limits within policy scoping (complementing existing budget enforcer)
+- [x] **RULE-04**: Content filter policy blocks requests containing sensitive patterns (SSN, credit card, configurable PII regex)
+- [x] **RULE-05**: Time window policy restricts API access to configured time periods (e.g., 09:00-17:00 UTC)
+- [x] **RULE-06**: Model route policy rewrites model field based on configurable criteria (token estimate, prompt keywords, agent ID, time of day, tool call presence, conversation turns)
+- [x] **RULE-07**: Model aliases map abstract tiers (cheap/standard/premium) to provider-specific model strings
+- [x] **RULE-08**: Model route safeguards: passthrough default when no rule matches, max_downgrade_level, per-agent routing opt-out
+- [x] **RULE-09**: Cost tracking logs both requested_model and actual_model for model-routed requests
 
 ### Reload — Hot Reload
 
-- [ ] **RELOAD-01**: Policy file changes detected and reloaded within 1 second without proxy restart
-- [ ] **RELOAD-02**: Invalid policy changes rejected with error logging, previous valid policies kept active
+- [x] **RELOAD-01**: Policy file changes detected and reloaded within 1 second without proxy restart
+- [x] **RELOAD-02**: Invalid policy changes rejected with error logging, previous valid policies kept active
 
 ### CLI — CLI Tooling
 
-- [ ] **CLI-01**: `govyn policy validate <file>` validates policy files and reports schema errors with line numbers
+- [x] **CLI-01**: `govyn policy validate <file>` validates policy files and reports schema errors with line numbers
 
 ### Tmpl — Policy Templates
 
-- [ ] **TMPL-01**: 10+ pre-built policy templates covering common governance scenarios (production-safety, budget-control, pii-protection, business-hours-only, read-only-mode, emergency-lockdown, etc.)
-- [ ] **TMPL-02**: All policy templates pass validation and have test coverage
+- [x] **TMPL-01**: 10+ pre-built policy templates covering common governance scenarios (production-safety, budget-control, pii-protection, business-hours-only, read-only-mode, emergency-lockdown, etc.)
+- [x] **TMPL-02**: All policy templates pass validation and have test coverage
 
 ## Future Requirements
 
@@ -99,28 +99,28 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHEMA-01 | Phase 6 | Pending |
-| SCHEMA-02 | Phase 6 | Pending |
-| SCHEMA-03 | Phase 6 | Pending |
-| EVAL-01 | Phase 6 | Pending |
-| EVAL-02 | Phase 6 | Pending |
-| EVAL-03 | Phase 6 | Pending |
-| EVAL-04 | Phase 6 | Pending |
-| EVAL-05 | Phase 6 | Pending |
-| RULE-01 | Phase 7 | Pending |
-| RULE-02 | Phase 7 | Pending |
-| RULE-03 | Phase 7 | Pending |
-| RULE-04 | Phase 7 | Pending |
-| RULE-05 | Phase 7 | Pending |
-| RULE-06 | Phase 8 | Pending |
-| RULE-07 | Phase 8 | Pending |
-| RULE-08 | Phase 8 | Pending |
-| RULE-09 | Phase 8 | Pending |
-| RELOAD-01 | Phase 9 | Pending |
-| RELOAD-02 | Phase 9 | Pending |
-| CLI-01 | Phase 9 | Pending |
-| TMPL-01 | Phase 9 | Pending |
-| TMPL-02 | Phase 9 | Pending |
+| SCHEMA-01 | Phase 6 | Complete |
+| SCHEMA-02 | Phase 6, Phase 9.1 (fix) | Complete |
+| SCHEMA-03 | Phase 6 | Complete |
+| EVAL-01 | Phase 6 | Complete |
+| EVAL-02 | Phase 6 | Complete |
+| EVAL-03 | Phase 6 | Complete |
+| EVAL-04 | Phase 6 | Complete |
+| EVAL-05 | Phase 6, Phase 9.1 (fix) | Complete |
+| RULE-01 | Phase 7 | Complete |
+| RULE-02 | Phase 7 | Complete |
+| RULE-03 | Phase 7.1, Phase 9.1 (fix) | Complete |
+| RULE-04 | Phase 7 | Complete |
+| RULE-05 | Phase 7.1 | Complete |
+| RULE-06 | Phase 8 | Complete |
+| RULE-07 | Phase 8 | Complete |
+| RULE-08 | Phase 8 | Complete |
+| RULE-09 | Phase 8 | Complete |
+| RELOAD-01 | Phase 9 | Complete |
+| RELOAD-02 | Phase 9 | Complete |
+| CLI-01 | Phase 9 | Complete |
+| TMPL-01 | Phase 9 | Complete |
+| TMPL-02 | Phase 9 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 22 total
@@ -129,4 +129,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-25*
-*Last updated: 2026-02-25 after roadmap mapping*
+*Last updated: 2026-02-25 after gap closure phase 9.1 added*

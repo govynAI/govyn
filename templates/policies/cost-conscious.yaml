@@ -1,0 +1,54 @@
+# Cost-Conscious — Aggressive Cost Savings (Model Routing + Budget Limits)
+#
+# This template combines aggressive model routing with tight budget limits
+# to minimize LLM spending. Ideal for cost-sensitive environments where
+# you want to maximize savings without sacrificing too much quality.
+#
+# Strategy:
+#   - Route most requests to cheap models (aggressive routing)
+#   - Only use standard models for tool calls and very long prompts
+#   - Enforce tight daily ($20) and monthly ($200) budget limits
+#
+# Customization:
+#   - Adjust budget limits to match your budget
+#   - Modify routing rules for your specific workload
+
+version: 1
+policies:
+  - name: cost-routing
+    description: Aggressively route to cheap models for maximum savings
+    type: model_route
+    enabled: true
+    scope: global
+    model_aliases:
+      cheap: "claude-haiku-4-20250514"
+      standard: "claude-sonnet-4-20250514"
+    rules:
+      # Route tool calls to standard (needs reliability)
+      - when:
+          tool_calls_present: true
+        route_to: standard
+
+      # Route very long prompts to standard
+      - when:
+          input_tokens_estimate: ">4000"
+        route_to: standard
+
+      # Everything else goes to cheap
+      - route_to: cheap
+
+  - name: cost-daily-limit
+    description: Tight daily budget limit of $20
+    type: budget_limit
+    enabled: true
+    scope: global
+    limit: 20
+    period: daily
+
+  - name: cost-monthly-limit
+    description: Tight monthly budget limit of $200
+    type: budget_limit
+    enabled: true
+    scope: global
+    limit: 200
+    period: monthly

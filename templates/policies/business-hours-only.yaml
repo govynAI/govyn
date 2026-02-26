@@ -1,0 +1,31 @@
+# Business Hours Only — Restrict Access to Working Hours
+#
+# Use this template to limit agent API access to business hours.
+# By default, allows access Monday-Friday 09:00-17:00 UTC.
+#
+# Customization:
+#   - Change timezone to your local zone:
+#       timezone: "America/New_York"
+#       timezone: "Europe/London"
+#       timezone: "Asia/Tokyo"
+#   - Adjust hours:
+#       start: "08:00"
+#       end: "18:00"
+#   - Change days to include weekends:
+#       days: [daily]
+#   - Use "deny" mode to block DURING specific hours instead:
+#       mode: deny
+
+version: 1
+policies:
+  - name: business-hours-window
+    description: Allow API access only during weekday business hours (09:00-17:00 UTC)
+    type: time_window
+    enabled: true
+    scope: global
+    mode: allow
+    start: "09:00"
+    end: "17:00"
+    days:
+      - weekdays
+    timezone: UTC

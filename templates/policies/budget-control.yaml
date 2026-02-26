@@ -1,0 +1,29 @@
+# Budget Control — Daily and Monthly Spending Limits
+#
+# Use this template to enforce spending limits on agent API usage.
+# The default configuration sets a $50/day and $500/month limit
+# applied globally to all agents.
+#
+# Customization:
+#   - Adjust limit values to match your budget
+#   - Change scope to "agent:<name>" for per-agent limits:
+#       scope: "agent:my-agent"
+#   - Add more policies for different agents with different budgets
+
+version: 1
+policies:
+  - name: daily-budget-limit
+    description: Limit daily spending to $50 per agent
+    type: budget_limit
+    enabled: true
+    scope: global
+    limit: 50
+    period: daily
+
+  - name: monthly-budget-limit
+    description: Limit monthly spending to $500 per agent
+    type: budget_limit
+    enabled: true
+    scope: global
+    limit: 500
+    period: monthly

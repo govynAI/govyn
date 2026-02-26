@@ -1,0 +1,51 @@
+# High Security — Multi-Layer Governance (Content Filter + Time Window + Block)
+#
+# This is the "everything on" template for maximum governance. Combines:
+#   - PII content filtering (SSN, credit card, email, phone, API keys)
+#   - Business hours time window (weekdays 08:00-18:00 UTC)
+#   - Destructive pattern blocking (SQL injection, dangerous commands)
+#
+# Recommended for regulated environments, financial services, healthcare,
+# or any deployment handling sensitive data.
+#
+# Customization:
+#   - Adjust time window hours and timezone for your region
+#   - Add custom patterns to the content filter
+#   - Add more block rules for domain-specific dangerous operations
+
+version: 1
+policies:
+  - name: highsec-pii-filter
+    description: Block all PII and API key patterns
+    type: content_filter
+    enabled: true
+    scope: global
+    patterns:
+      - ssn
+      - credit_card
+      - email
+      - phone
+      - "(sk-[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16})"
+    reveal_pattern: false
+
+  - name: highsec-business-hours
+    description: Restrict access to extended business hours (weekdays 08:00-18:00 UTC)
+    type: time_window
+    enabled: true
+    scope: global
+    mode: allow
+    start: "08:00"
+    end: "18:00"
+    days:
+      - weekdays
+    timezone: UTC
+
+  - name: highsec-block-dangerous
+    description: Block destructive SQL and shell operations
+    type: block
+    enabled: true
+    scope: global
+    match:
+      body: "([Dd][Ee][Ll][Ee][Tt][Ee]\\s+[Ff][Rr][Oo][Mm]|[Dd][Rr][Oo][Pp]\\s+[Tt][Aa][Bb][Ll][Ee]|[Tt][Rr][Uu][Nn][Cc][Aa][Tt][Ee]|rm\\s+-rf|mkfs)"
+      regex: true
+    message: "Blocked: dangerous operation detected by high-security policy"

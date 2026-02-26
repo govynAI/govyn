@@ -40,6 +40,7 @@ interface RawConfig {
     limit_type?: 'hard' | 'soft';
     soft_warning_percent?: number;
   } | null>;
+  policies_file?: string;
   logging?: {
     enabled?: boolean;
     directory?: string;
@@ -234,6 +235,12 @@ export function loadConfig(filePath?: string): ProxyConfig {
     };
   }
 
+  // Parse policies_file (optional path to policy YAML)
+  const policiesFile = typeof cfg.policies_file === 'string' ? cfg.policies_file : undefined;
+  if (policiesFile) {
+    console.log(`[govyn] Policy file configured: ${policiesFile}`);
+  }
+
   const config: ProxyConfig = {
     port: cfg.proxy.port,
     host: cfg.proxy.host ?? '0.0.0.0',
@@ -242,6 +249,7 @@ export function loadConfig(filePath?: string): ProxyConfig {
     pricing,
     budgets,
     ...(logging ? { logging } : {}),
+    ...(policiesFile ? { policiesFile } : {}),
   };
 
   console.log(`[govyn] Loaded config from ${absolutePath}`);

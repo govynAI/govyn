@@ -1,0 +1,42 @@
+# Production Safety — Block Destructive Patterns
+#
+# Use this template to prevent agents from executing dangerous operations
+# such as destructive SQL statements, dangerous shell commands, or leaking
+# credentials. Recommended for all production deployments.
+#
+# Customization:
+#   - Add more body patterns to catch additional dangerous operations
+#   - Change scope to "agent:<name>" to target specific agents
+#   - Set enabled: false to temporarily disable without removing
+
+version: 1
+policies:
+  - name: block-destructive-sql
+    description: Block destructive SQL patterns (DELETE FROM, DROP TABLE, TRUNCATE, ALTER TABLE DROP)
+    type: block
+    enabled: true
+    scope: global
+    match:
+      body: "([Dd][Ee][Ll][Ee][Tt][Ee]\\s+[Ff][Rr][Oo][Mm]|[Dd][Rr][Oo][Pp]\\s+[Tt][Aa][Bb][Ll][Ee]|[Tt][Rr][Uu][Nn][Cc][Aa][Tt][Ee]\\s+|[Aa][Ll][Tt][Ee][Rr]\\s+[Tt][Aa][Bb][Ll][Ee]\\s+\\w+\\s+[Dd][Rr][Oo][Pp])"
+      regex: true
+    message: "Blocked: destructive SQL operation detected"
+
+  - name: block-dangerous-shell
+    description: Block dangerous shell commands (rm -rf, mkfs, dd if=)
+    type: block
+    enabled: true
+    scope: global
+    match:
+      body: "(rm\\s+-rf|mkfs\\s+|dd\\s+if=)"
+      regex: true
+    message: "Blocked: dangerous shell command detected"
+
+  - name: block-credential-exposure
+    description: Block requests containing API keys or tokens in the body
+    type: block
+    enabled: true
+    scope: global
+    match:
+      body: "(sk-[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{36})"
+      regex: true
+    message: "Blocked: potential credential exposure detected"

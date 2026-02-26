@@ -1,0 +1,30 @@
+# Development Sandbox — Permissive Mode for Testing
+#
+# Use this template during development and testing. It provides generous
+# rate limits and budget allowances so developers can iterate quickly
+# without hitting governance barriers.
+#
+# WARNING: For development/testing ONLY. Swap to production-safety.yaml
+# or high-security.yaml before deploying to production.
+#
+# Customization:
+#   - Reduce limits if developers are sharing a test API key
+#   - Add content_filter policies if testing with real data
+
+version: 1
+policies:
+  - name: dev-rate-limit
+    description: Permissive rate limit for development (100 requests per 60 seconds)
+    type: rate_limit
+    enabled: true
+    scope: global
+    limit: 100
+    window_seconds: 60
+
+  - name: dev-daily-budget
+    description: Generous daily budget for development ($100/day)
+    type: budget_limit
+    enabled: true
+    scope: global
+    limit: 100
+    period: daily

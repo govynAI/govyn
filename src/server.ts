@@ -26,6 +26,8 @@ import { LoopDetector } from './loop-detector.js';
 import { govynEvents } from './events.js';
 import type { PricingTable } from './pricing.js';
 import type { ActionLogger } from './action-logger.js';
+import type { PolicyEngine } from './policy-engine.js';
+import type { PolicyRequestContext, PolicyEvaluationResult, ModelRouteResult } from './policy-types.js';
 
 /**
  * Send a JSON error response.
@@ -45,6 +47,99 @@ function sendJsonError(
 }
 
 /**
+ * Extract the model name from a JSON request body.
+ * Returns undefined if body is missing, not JSON, or has no model field.
+ */
+function extractModelFromBody(body: string | undefined): string | undefined {
+  if (!body) return undefined;
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed && typeof parsed.model === 'string') return parsed.model;
+  } catch {
+    // Not JSON — no model to extract
+  }
+  return undefined;
+}
+
+/**
+ * Extract routing context from a JSON request body for model routing evaluation.
+ * Parses messages to extract system prompt, user prompt, tool presence,
+ * conversation turns, and estimated token count.
+ */
+function extractRoutingContext(body: string | undefined): {
+  inputTokensEstimate: number;
+  systemPrompt?: string;
+  userPrompt?: string;
+  toolCallsPresent: boolean;
+  conversationTurns: number;
+} {
+  const defaults = {
+    inputTokensEstimate: 0,
+    systemPrompt: undefined as string | undefined,
+    userPrompt: undefined as string | undefined,
+    toolCallsPresent: false,
+    conversationTurns: 0,
+  };
+  if (!body) return defaults;
+
+  try {
+    const parsed = JSON.parse(body);
+    if (!parsed || typeof parsed !== 'object') return defaults;
+
+    // Estimate tokens: count total characters in string content / 4
+    let totalChars = 0;
+
+    // Extract system prompt (Anthropic: top-level `system`; OpenAI: messages[].role === "system")
+    let systemPrompt: string | undefined;
+    if (typeof parsed.system === 'string') {
+      systemPrompt = parsed.system;
+      totalChars += parsed.system.length;
+    }
+
+    // Extract from messages array
+    let userPrompt: string | undefined;
+    let conversationTurns = 0;
+    const messages = Array.isArray(parsed.messages) ? parsed.messages : [];
+    conversationTurns = messages.length;
+
+    for (const msg of messages) {
+      if (!msg || typeof msg !== 'object') continue;
+      const content = typeof msg.content === 'string' ? msg.content : '';
+      totalChars += content.length;
+
+      if (msg.role === 'system' && !systemPrompt) {
+        systemPrompt = content;
+      }
+      if (msg.role === 'user') {
+        userPrompt = content; // last user message wins
+      }
+    }
+
+    // Check for tool/function definitions
+    const toolCallsPresent =
+      (Array.isArray(parsed.tools) && parsed.tools.length > 0) ||
+      (Array.isArray(parsed.functions) && parsed.functions.length > 0);
+
+    // Add tool definitions to char count for token estimate
+    if (toolCallsPresent) {
+      totalChars += JSON.stringify(parsed.tools ?? parsed.functions).length;
+    }
+
+    const inputTokensEstimate = Math.ceil(totalChars / 4);
+
+    return {
+      inputTokensEstimate,
+      systemPrompt,
+      userPrompt,
+      toolCallsPresent,
+      conversationTurns,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+/**
  * Create and start the Govyn HTTP proxy server.
  *
  * @param config - Proxy configuration (port, host, providers, agents, pricing, budgets)
@@ -52,6 +147,7 @@ function sendJsonError(
  * @param budgetEnforcer - Budget enforcer for per-agent spending limits (optional, defaults to empty)
  * @param loopDetector - Loop detector for detecting repeated identical requests (optional)
  * @param actionLogger - Action logger for structured request logging (optional)
+ * @param policyEngine - Policy engine for evaluating request policies (optional)
  * @returns The created http.Server instance
  */
 export function startServer(
@@ -60,6 +156,7 @@ export function startServer(
   budgetEnforcer?: BudgetEnforcer,
   loopDetector?: LoopDetector,
   actionLogger?: ActionLogger,
+  policyEngine?: PolicyEngine,
 ): http.Server {
   // Cast pricing to PricingTable — ProxyConfig.pricing and PricingTable are structurally equivalent
   const pricingTable = config.pricing as PricingTable;
@@ -275,26 +372,179 @@ export function startServer(
         return;
       }
 
-      // Forward the request to the upstream provider, attributing cost to the resolved agent
-      forwardRequest(
-        req,
-        res,
-        routeMatch,
-        agentIdentity.agentId,
-        pricingTable,
-        aggregator,
-        budgetWarning,
-        loopDetector,
-        enforcer,
-        actionLogger,
-      ).catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        console.error('[server] unhandled forwarding error:', message);
-        if (!res.headersSent) {
-          sendJsonError(res, 500, 'Internal proxy error', 'internal_error');
-        } else if (!res.writableEnded) {
-          res.end();
+      // Buffer the request body for policy evaluation (content_filter needs body access).
+      // The buffered body is then passed to forwardRequest to avoid re-reading the stream.
+      const bodyChunks: Buffer[] = [];
+      req.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
+      req.on('end', () => {
+        const bodyBuffer = Buffer.concat(bodyChunks);
+        const bodyString = bodyBuffer.length > 0 ? bodyBuffer.toString('utf8') : undefined;
+
+        // Evaluate policies (between route matching and forwarding)
+        let requestedModel = extractModelFromBody(bodyString);
+        let actualModel = requestedModel;
+        let finalBodyBuffer = bodyBuffer;
+        let policyResult: PolicyEvaluationResult | undefined;
+
+        if (policyEngine && policyEngine.getPolicies().length > 0) {
+          const routingCtx = extractRoutingContext(bodyString);
+          const policyContext: PolicyRequestContext = {
+            agentId: agentIdentity.agentId,
+            provider: routeMatch.providerType,
+            path: routeMatch.upstreamPath,
+            method: method,
+            body: bodyString,
+            headers: req.headers as Record<string, string>,
+            model: extractModelFromBody(bodyString),
+            inputTokensEstimate: routingCtx.inputTokensEstimate,
+            systemPrompt: routingCtx.systemPrompt,
+            userPrompt: routingCtx.userPrompt,
+            toolCallsPresent: routingCtx.toolCallsPresent,
+            conversationTurns: routingCtx.conversationTurns,
+          };
+
+          policyResult = policyEngine.evaluate(policyContext);
+
+          if (!policyResult.allowed && policyResult.denied) {
+            // Policy denied — determine response code based on policy type
+            const denied = policyResult.denied;
+            const isRateLimit = denied.policyType === 'rate_limit';
+            const statusCode = isRateLimit ? 429 : 403;
+            const errorType = isRateLimit ? 'govyn_rate_limited' : 'govyn_policy_violation';
+
+            const errorBody = JSON.stringify({
+              error: {
+                type: errorType,
+                message: denied.message ?? denied.reason ?? `Request blocked by policy '${denied.policyName}'`,
+                policy: denied.policyName,
+                agent: agentIdentity.agentId,
+                retry_after_seconds: denied.retryAfterSeconds ?? null,
+              },
+            });
+
+            const responseHeaders: Record<string, string> = {
+              'content-type': 'application/json',
+              'content-length': Buffer.byteLength(errorBody).toString(),
+            };
+            if (isRateLimit && denied.retryAfterSeconds) {
+              responseHeaders['retry-after'] = denied.retryAfterSeconds.toString();
+            }
+
+            res.writeHead(statusCode, responseHeaders);
+            res.end(errorBody);
+
+            // Emit policy_denied event
+            govynEvents.emit('event', {
+              type: 'policy_denied',
+              agentId: agentIdentity.agentId,
+              provider: routeMatch.providerType,
+              path: routeMatch.upstreamPath,
+              policyName: denied.policyName,
+              policyType: denied.policyType,
+              reason: denied.reason ?? '',
+              evaluationTimeMs: policyResult.evaluationTimeMs,
+              allowed: false,
+            });
+
+            // Log policy-denied request in action logs
+            if (actionLogger) {
+              const logEntry: LogEntry = {
+                id: crypto.randomUUID(),
+                timestamp: new Date().toISOString(),
+                agent_id: agentIdentity.agentId,
+                provider: routeMatch.providerType,
+                target: routeMatch.upstreamPath,
+                model: null,
+                input_tokens: null,
+                output_tokens: null,
+                cost: null,
+                priced: false,
+                latency_ms: 0,
+                status: statusCode,
+                has_payload: false,
+                payload_id: null,
+                storage_region: 'auto',
+                policy_result: {
+                  allowed: false,
+                  evaluated_count: policyResult.evaluatedCount,
+                  matched_count: policyResult.matchedCount,
+                  denied_by: denied.policyName,
+                  evaluation_time_ms: policyResult.evaluationTimeMs,
+                },
+              };
+              actionLogger.log(logEntry);
+            }
+
+            return;
+          }
+
+          // Policy allowed — emit enforced event
+          govynEvents.emit('event', {
+            type: 'policy_enforced',
+            agentId: agentIdentity.agentId,
+            provider: routeMatch.providerType,
+            path: routeMatch.upstreamPath,
+            policyCount: policyResult.matchedCount,
+            evaluationTimeMs: policyResult.evaluationTimeMs,
+            allowed: true,
+          });
+
+          // Check for model_route results with routeTo
+          const routeResult = policyResult.results.find(
+            (r) => r.policyType === 'model_route' && (r as ModelRouteResult).routeTo,
+          ) as ModelRouteResult | undefined;
+
+          if (routeResult?.routeTo) {
+            // Rewrite the model field in the JSON body
+            actualModel = routeResult.routeTo;
+            try {
+              const parsed = JSON.parse(bodyString ?? '{}');
+              parsed.model = actualModel;
+              const rewritten = JSON.stringify(parsed);
+              finalBodyBuffer = Buffer.from(rewritten, 'utf8');
+            } catch {
+              // If body parse fails, skip rewriting (passthrough)
+            }
+
+            // Emit model_routed event for observability
+            govynEvents.emit('event', {
+              type: 'model_routed',
+              agentId: agentIdentity.agentId,
+              provider: routeMatch.providerType,
+              requestedModel: requestedModel ?? 'unknown',
+              actualModel,
+              policyName: routeResult.policyName,
+              matchedRuleIndex: routeResult.matchedRuleIndex,
+            });
+          }
         }
+
+        // Forward the request to the upstream provider, attributing cost to the resolved agent.
+        // Pass finalBodyBuffer (rewritten or original) to avoid re-reading the consumed stream.
+        // Pass requestedModel so cost tracking records original model before routing.
+        forwardRequest(
+          req,
+          res,
+          routeMatch,
+          agentIdentity.agentId,
+          pricingTable,
+          aggregator,
+          budgetWarning,
+          loopDetector,
+          enforcer,
+          actionLogger,
+          finalBodyBuffer,
+          requestedModel !== actualModel ? requestedModel : undefined,
+          policyResult,  // pass the evaluation result for action log enrichment
+        ).catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : 'Unknown error';
+          console.error('[server] unhandled forwarding error:', message);
+          if (!res.headersSent) {
+            sendJsonError(res, 500, 'Internal proxy error', 'internal_error');
+          } else if (!res.writableEnded) {
+            res.end();
+          }
+        });
       });
     },
   );

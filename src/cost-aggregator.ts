@@ -68,6 +68,9 @@ export class CostAggregator {
       case 'day':
         cutoff = startOfDayUTC();
         break;
+      case 'week':
+        cutoff = now - 7 * 24 * 60 * 60 * 1000;
+        break;
       case 'month':
         cutoff = startOfMonthUTC();
         break;
@@ -166,6 +169,9 @@ export class CostAggregator {
         break;
       case 'day':
         cutoff = startOfDayUTC();
+        break;
+      case 'week':
+        cutoff = now - 7 * 24 * 60 * 60 * 1000;
         break;
       case 'month':
         cutoff = startOfMonthUTC();

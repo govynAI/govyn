@@ -106,6 +106,8 @@ export interface CostRecord {
   priced: boolean;
   /** Unix timestamp (ms) when the record was created */
   timestamp: number;
+  /** Original model requested by the agent (before model routing). Undefined if no routing occurred. */
+  requestedModel?: string;
 }
 
 /**
@@ -137,7 +139,7 @@ export interface CostSummary {
  * - 'month': current calendar month (1st UTC to now)
  * - 'all': all records
  */
-export type TimePeriod = 'hour' | 'day' | 'month' | 'all';
+export type TimePeriod = 'hour' | 'day' | 'week' | 'month' | 'all';
 
 /** Per-agent budget configuration from YAML */
 export interface BudgetConfig {
@@ -231,6 +233,18 @@ export interface LogEntry {
   payload_id: string | null;
   /** Storage region where this log entry is stored */
   storage_region: 'eu' | 'us' | 'auto';
+  /** Original model requested by the agent (before routing rewrite) */
+  requested_model?: string | null;
+  /** Actual model used after routing (same as model if no routing) */
+  actual_model?: string | null;
+  /** Policy evaluation result summary (null if no policies loaded) */
+  policy_result?: {
+    allowed: boolean;
+    evaluated_count: number;
+    matched_count: number;
+    denied_by?: string;
+    evaluation_time_ms: number;
+  } | null;
 }
 
 /**
@@ -281,4 +295,6 @@ export interface ProxyConfig {
   budgets: Map<string, BudgetConfig>;
   /** Action logging configuration (optional, defaults applied if missing) */
   logging?: LoggingConfig;
+  /** Path to the YAML policy file (optional — no policies if not set) */
+  policiesFile?: string;
 }

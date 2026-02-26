@@ -1,0 +1,21 @@
+# Emergency Lockdown — Block ALL Agent Requests
+#
+# Enable this policy to immediately block ALL agent API requests.
+# This is a kill switch for emergency situations where you need to
+# stop all agent activity immediately.
+#
+# Usage:
+#   1. Copy this template to your active policy directory
+#   2. Set enabled: true when you need to activate lockdown
+#   3. Set enabled: false (or remove the file) to restore access
+#
+# This policy is DISABLED by default. Enable it only during emergencies.
+
+version: 1
+policies:
+  - name: emergency-lockdown
+    description: Block ALL agent API requests (emergency kill switch)
+    type: block
+    enabled: false
+    scope: global
+    message: "Service is in emergency lockdown. All requests are blocked."

@@ -1,0 +1,31 @@
+# Read-Only Mode — Block Write and Delete Operations
+#
+# Use this template to restrict agents to read-only operations.
+# Blocks requests whose paths contain write-oriented endpoint patterns,
+# and also blocks requests matching write/delete action types.
+#
+# Customization:
+#   - Add more path patterns for your specific APIs
+#   - Change scope to "agent:<name>" to apply read-only to specific agents
+#   - Disable individual policies to allow specific write operations
+
+version: 1
+policies:
+  - name: block-write-paths
+    description: Block requests to write/delete/create/update/modify endpoints
+    type: block
+    enabled: true
+    scope: global
+    match:
+      path: "/(delete|create|update|write|modify|remove|destroy|patch)"
+      regex: true
+    message: "Blocked: write operation not allowed in read-only mode"
+
+  - name: block-write-actions
+    description: Block image generation and other non-read action types
+    type: block
+    enabled: true
+    scope: global
+    match:
+      action_type: image_generation
+    message: "Blocked: image generation not allowed in read-only mode"

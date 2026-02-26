@@ -11,6 +11,8 @@ import { CostAggregator } from './cost-aggregator.js';
 import { BudgetEnforcer } from './budget-enforcer.js';
 import { LoopDetector } from './loop-detector.js';
 import { ActionLogger } from './action-logger.js';
+import { PolicyEngine } from './policy-engine.js';
+import { PolicyWatcher } from './policy-watcher.js';
 import type { LoopDetectionConfig, LoggingConfig } from './types.js';
 
 // Support --config <path> CLI flag
@@ -65,7 +67,33 @@ try {
     console.log(`[govyn] Action logging enabled: dir=${loggingConfig.directory} mode=${loggingConfig.defaultMode} stdout=${loggingConfig.stdout} file=${loggingConfig.file}`);
   }
 
-  startServer(config, aggregator, budgetEnforcer, loopDetector, actionLogger);
+  // Create policy engine
+  const policyEngine = new PolicyEngine();
+  policyEngine.setCostAggregator(aggregator);
+
+  // Load policies from file if configured
+  if (config.policiesFile) {
+    const policyResult = policyEngine.loadFromFile(config.policiesFile);
+    if (policyResult.success) {
+      console.log(`[govyn] Loaded ${policyResult.policies.length} policies from ${config.policiesFile}`);
+    } else {
+      console.error(`[govyn] Failed to load policies from ${config.policiesFile}:`);
+      for (const err of policyResult.errors) {
+        const loc = err.line ? ` (line ${err.line})` : '';
+        console.error(`  - ${err.message}${loc}`);
+      }
+      // Continue without policies — fail-open per ADR-002
+    }
+  }
+
+  // Start policy file watcher for hot reload
+  if (config.policiesFile) {
+    const watcher = new PolicyWatcher(policyEngine, config.policiesFile);
+    watcher.start();
+    console.log(`[govyn] Watching policy file for changes: ${config.policiesFile}`);
+  }
+
+  startServer(config, aggregator, budgetEnforcer, loopDetector, actionLogger, policyEngine);
 } catch (err) {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`[govyn] Failed to start: ${message}`);

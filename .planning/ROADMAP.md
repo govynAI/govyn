@@ -7,7 +7,7 @@ Govyn is an API proxy that sits between AI agents and every tool/API they call, 
 ## Milestones
 
 - ✅ **v1.0 Core Proxy MVP** — Phases 1-5 (shipped 2026-02-25)
-- 📋 **v1.1 Policy Engine** — Phases 6-9 (policy schema, rule types, model routing, templates)
+- 📋 **v1.1 Policy Engine** — Phases 6-9.1 (policy schema, rule types, model routing, templates, tech debt cleanup)
 - 📋 **v1.2 Approval Queue & Dashboard** — Phases 10-14 (approval queue, dashboard foundation, cost views, policy UI, approval UI)
 - 📋 **v1.3 Advanced Features** — Phases 15-17 (session replay, anomaly detection, SDKs)
 - 📋 **v1.4 Launch & Growth** — Phases 18-19 (open source launch, distribution)
@@ -84,7 +84,36 @@ Plans:
 - All rule types produce structured error responses with policy name and reason
 - Each rule type has unit tests and integration tests through the proxy pipeline
 
-**Estimated plans:** 2
+**Plans:** 2/2 plans complete
+
+Plans:
+- [ ] 07-01-PLAN.md -- Block, rate_limit, and budget_limit evaluators with TDD (RED-GREEN)
+- [ ] 07-02-PLAN.md -- Content filter, time window evaluators, and server body/header integration with TDD
+
+---
+
+#### Phase 7.1: Fix Policy Engine Integration Bugs
+
+**Goal:** Fix two critical integration bugs found during milestone audit — budget_limit policies inoperative in production (missing CostAggregator wiring) and time_window policies broken when loaded from YAML (parser/evaluator schema mismatch).
+
+**Requirements:** RULE-03, RULE-05
+
+**Gap Closure:** Closes integration gaps from v1.1 audit
+
+**What gets built:**
+- Wire `setCostAggregator()` call in `src/index.ts` production bootstrap so budget_limit policies enforce correctly
+- Align time_window parser/evaluator schema so YAML-loaded policies work end-to-end
+- Integration tests covering the YAML → parser → engine → enforcement path for both budget_limit and time_window
+
+**Success criteria:**
+- Budget limit policies loaded from YAML enforce spending limits in production bootstrap
+- Time window policies loaded from YAML correctly allow/deny based on configured hours
+- Integration tests exercise the full YAML → parser → evaluator path for both rule types
+
+**Plans:** 1 plan
+
+Plans:
+- [x] 07.1-01-PLAN.md -- Fix budget_limit CostAggregator wiring and time_window parser schema mismatch with integration tests (2026-02-25)
 
 ---
 
@@ -112,7 +141,11 @@ Plans:
 - Cost tracking records both requested_model and actual_model
 - Model rewrite is transparent to agent (response format unchanged)
 
-**Estimated plans:** 2
+**Plans:** 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md -- Model route evaluator with criteria matching, alias resolution, and safeguards (TDD)
+- [ ] 08-02-PLAN.md -- Server integration, body rewriting, dual-model cost tracking, and integration tests
 
 ---
 
@@ -151,7 +184,42 @@ Plans:
 - All templates have integration tests proving they evaluate correctly
 - Templates documented with copy-paste examples
 
-**Estimated plans:** 2
+**Plans:** 3 plans
+
+Plans:
+- [ ] 09-01-PLAN.md -- Hot reload: PolicyWatcher with file watching, debounce, atomic reload, and integration tests
+- [ ] 09-02-PLAN.md -- CLI: `govyn policy validate <file>` command with line-number error reporting
+- [ ] 09-03-PLAN.md -- Templates: 11 pre-built policy YAML files with validation and evaluation tests
+
+---
+
+#### Phase 9.1: Parser Validation & Tech Debt Cleanup
+
+**Goal:** Fix integration gaps and tech debt identified during v1.1 milestone audit — parser type-specific field validation, action log policy context for allowed requests, weekly budget period semantics, TypeScript type errors, and load test stability.
+
+**Requirements:** SCHEMA-02, EVAL-05, RULE-03
+
+**Gap Closure:** Closes integration gaps and tech debt from v1.1 re-audit (2026-02-25)
+
+**What gets built:**
+- Parser strict validation of required type-specific fields (limit, window_seconds, patterns, start/end) — reject with helpful errors instead of silently producing undefined values
+- Fix 4 TS2322 TypeScript errors in policy-parser.ts (lines 346, 357, 367, 380) for optional vs required field handling
+- Pass policy_result to proxy.ts forwardRequest for allowed requests so action logs include policy evaluation context
+- Implement weekly budget period as 7-day sliding window instead of mapping to 'all' (all-time)
+- Fix pre-existing load test flake in tests/load/load.test.ts (p95 latency timing assertion)
+
+**Success criteria:**
+- Parser rejects policies with missing required type-specific fields with line-number error messages
+- Zero TS2322 TypeScript errors in policy-parser.ts
+- Allowed request action logs include policy_result field
+- `period: weekly` budget policies enforce against 7-day window (not all-time)
+- Load test passes reliably without environment-sensitive flake
+- All existing tests continue to pass
+
+**Plans:** 1 plan
+
+Plans:
+- [x] 09.1-01-PLAN.md -- Parser strict validation, TS2322 fixes, policy_result in allowed logs, weekly budget period, load test stabilization
 
 ---
 
@@ -184,9 +252,11 @@ Plans:
 | 4. Action Logging | v1.0 | 2/2 | Complete | 2026-02-25 |
 | 5. Packaging, Testing & Deployment | v1.0 | 4/4 | Complete | 2026-02-25 |
 | 6. Policy Schema & Core Engine | v1.1 | 0/3 | Not started | — |
-| 7. Policy Rule Types | v1.1 | 0/2 | Not started | — |
+| 7. Policy Rule Types | v1.1 | Complete    | 2026-02-25 | — |
+| 7.1 Fix Policy Engine Integration Bugs | v1.1 | 0/1 | Not started | — |
 | 8. Smart Model Routing | v1.1 | 0/2 | Not started | — |
 | 9. Hot Reload, CLI & Policy Templates | v1.1 | 0/2 | Not started | — |
+| 9.1 Parser Validation & Tech Debt Cleanup | v1.1 | 1/1 | Complete | 5 min |
 | 10. Approval Queue | v1.2 | — | Future | — |
 | 11. Dashboard Foundation | v1.2 | — | Future | — |
 | 12. Cost & Activity Views | v1.2 | — | Future | — |

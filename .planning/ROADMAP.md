@@ -64,11 +64,11 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   3. Database migrations run automatically when the proxy starts
   4. When a policy flags a request for human approval, the proxy returns HTTP 202 with a polling URL instead of forwarding the request
   5. An agent can poll the approval endpoint and receive the current decision status (pending, approved, or denied)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 10-01: TBD
-- [ ] 10-02: TBD
+- [ ] 10-01: Database schema, migrations, connection pool, async DB writer for cost records and policy evaluations
+- [ ] 10-02: Approval queue backend — require_approval policy type, HTTP 202 flow, polling endpoint, approval token validation
 
 ### Phase 11: Dashboard Foundation
 **Goal**: Users can access a standalone React dashboard that authenticates via Clerk, connects to the proxy API, and provides the navigation shell for all governance features

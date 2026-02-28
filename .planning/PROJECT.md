@@ -44,16 +44,14 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 
 ### Active (v1.3)
 
-- [ ] Session replay with step-through and comparison views
-- [ ] Anomaly detection (cost spikes, error loops, deviation alerting)
-- [ ] Python SDK and Node.js SDK (drop-in replacements for openai/anthropic clients)
+- [ ] Python SDK — drop-in replacement for openai/anthropic Python clients, routes through Govyn proxy
+- [ ] Node.js SDK — drop-in replacement for openai/anthropic Node clients, routes through Govyn proxy
 
 ### Future
 
 - [ ] Stripe billing integration (Starter $29, Team $99, Enterprise $299)
 - [ ] Session replay with step-through and comparison views
 - [ ] Anomaly detection (cost spikes, error loops, deviation alerting)
-- [ ] Python SDK and Node.js SDK (drop-in replacements for openai/anthropic clients)
 - [ ] LangChain callback handler and framework plugins
 - [ ] Self-hosted proxy + cloud dashboard deployment model
 - [ ] Dual key mode: Key Storage (strongest enforcement) and Passthrough (lowest friction)
@@ -71,7 +69,7 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 
 Shipped v1.2 Dashboard & Governance Platform. Govyn is now a full-stack governance product with proxy + dashboard + persistence.
 
-**Next milestone:** v1.3 Advanced Features — session replay, anomaly detection, framework SDKs
+**Next milestone:** v1.3 Framework SDKs — Python and Node.js drop-in replacements
 
 ## Context
 
@@ -136,4 +134,4 @@ Shipped v1.2 Dashboard & Governance Platform. Govyn is now a full-stack governan
 | Tailwind v4 via Vite plugin | No PostCSS config needed, future-proof | ⚠️ Revisit — shadcn/ui doesn't natively support v4 yet |
 
 ---
-*Last updated: 2026-02-28 after v1.2 milestone*
+*Last updated: 2026-02-28 after v1.3 milestone start*

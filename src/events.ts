@@ -67,6 +67,19 @@ export type GovynEvent =
       type: 'policy_reload_failed';
       filePath: string;
       error: string;
+    }
+  | {
+      type: 'db_write_failed';
+      table: string;
+      error: string;
+    }
+  | {
+      type: 'alert_fired';
+      ruleId: string;
+      ruleName: string;
+      ruleType: string;
+      webhookUrl: string;
+      webhookStatus: number | null;
     };
 
 /** Singleton event bus — consumers subscribe via govynEvents.on('event', cb) */

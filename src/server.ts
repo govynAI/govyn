@@ -20,6 +20,9 @@ import { resolveAgentId } from './agents.js';
 import { handleCostApi } from './cost-api.js';
 import { handleBudgetApi } from './budget-api.js';
 import { handleLogApi } from './log-api.js';
+import { handlePolicyApi } from './policy-api.js';
+import { handleApprovalApi } from './approval-api.js';
+import { handleAlertApi } from './alert-api.js';
 import { CostAggregator } from './cost-aggregator.js';
 import { BudgetEnforcer } from './budget-enforcer.js';
 import { LoopDetector } from './loop-detector.js';
@@ -27,7 +30,11 @@ import { govynEvents } from './events.js';
 import type { PricingTable } from './pricing.js';
 import type { ActionLogger } from './action-logger.js';
 import type { PolicyEngine } from './policy-engine.js';
-import type { PolicyRequestContext, PolicyEvaluationResult, ModelRouteResult } from './policy-types.js';
+import type { PolicyRequestContext, PolicyEvaluationResult, ModelRouteResult, ApprovalPolicyResult } from './policy-types.js';
+import type { DbWriter } from './db-writer.js';
+import type { ApprovalManager } from './approval.js';
+import { generateRequestSummary } from './approval.js';
+import type { AlertManager } from './alert-manager.js';
 
 /**
  * Send a JSON error response.
@@ -157,6 +164,11 @@ export function startServer(
   loopDetector?: LoopDetector,
   actionLogger?: ActionLogger,
   policyEngine?: PolicyEngine,
+  dbWriter?: DbWriter,
+  approvalManager?: ApprovalManager,
+  policiesFile?: string,
+  sql?: import('postgres').Sql,
+  alertManager?: AlertManager,
 ): http.Server {
   // Cast pricing to PricingTable — ProxyConfig.pricing and PricingTable are structurally equivalent
   const pricingTable = config.pricing as PricingTable;
@@ -168,6 +180,21 @@ export function startServer(
     (req: http.IncomingMessage, res: http.ServerResponse) => {
       const url = req.url ?? '/';
       const method = req.method ?? 'GET';
+
+      // CORS headers for dashboard (allow any origin for API/health endpoints)
+      const origin = req.headers.origin;
+      if (origin && (url === '/health' || url.startsWith('/api/'))) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Govyn-Approval, X-Agent-Id');
+        res.setHeader('Access-Control-Max-Age', '86400');
+
+        if (method === 'OPTIONS') {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+      }
 
       // Health check endpoint — serve before proxy routing
       if (url === '/health' && method === 'GET') {
@@ -260,6 +287,101 @@ export function startServer(
           return;
         }
         handleLogApi(req, res, actionLogger);
+        return;
+      }
+
+      // Alert management API endpoints
+      if (url.startsWith('/api/alerts') && sql && alertManager) {
+        handleAlertApi(req, res, sql, alertManager);
+        return;
+      }
+
+      // Approval list endpoint: GET /api/approvals (without trailing ID)
+      if (method === 'GET' && /^\/api\/approvals(\?|$)/.test(url) && sql) {
+        handleApprovalApi(req, res, sql);
+        return;
+      }
+
+      // Approval polling endpoint: GET /api/approvals/:id
+      if (method === 'GET' && url.startsWith('/api/approvals/') && approvalManager) {
+        const id = url.replace('/api/approvals/', '').split('?')[0];
+        approvalManager.getApprovalStatus(id).then((status) => {
+          if (!status) {
+            sendJsonError(res, 404, 'Approval request not found', 'not_found');
+            return;
+          }
+          const responseBody = JSON.stringify({
+            id: status.id,
+            status: status.status,
+            approval_token: status.approvalToken ?? null,
+            decided_at: status.decidedAt ?? null,
+            expires_at: status.expiresAt,
+          });
+          res.writeHead(200, {
+            'content-type': 'application/json',
+            'content-length': Buffer.byteLength(responseBody).toString(),
+          });
+          res.end(responseBody);
+        }).catch(() => {
+          sendJsonError(res, 500, 'Failed to fetch approval status', 'internal_error');
+        });
+        return;
+      }
+
+      // Approval approve/deny endpoints: POST /api/approvals/:id/approve or /api/approvals/:id/deny
+      if (method === 'POST' && url.startsWith('/api/approvals/') && approvalManager) {
+        const approveMatch = url.match(/^\/api\/approvals\/([^/]+)\/(approve|deny)$/);
+        if (approveMatch) {
+          const requestId = approveMatch[1];
+          const action = approveMatch[2] as 'approve' | 'deny';
+
+          const apiBodyChunks: Buffer[] = [];
+          req.on('data', (chunk: Buffer) => apiBodyChunks.push(chunk));
+          req.on('end', () => {
+            (async () => {
+              try {
+                const apiBodyStr = Buffer.concat(apiBodyChunks).toString('utf8');
+                const parsed = apiBodyStr ? JSON.parse(apiBodyStr) as { decided_by?: string; notes?: string } : {};
+
+                const decidedBy = parsed.decided_by ?? 'api';
+
+                let success: boolean;
+                if (action === 'approve') {
+                  success = await approvalManager.approveRequest(requestId, decidedBy, parsed.notes);
+                } else {
+                  success = await approvalManager.denyRequest(requestId, decidedBy, parsed.notes);
+                }
+
+                if (success) {
+                  const responseBody = JSON.stringify({ success: true, id: requestId, action });
+                  res.writeHead(200, {
+                    'content-type': 'application/json',
+                    'content-length': Buffer.byteLength(responseBody).toString(),
+                  });
+                  res.end(responseBody);
+
+                  // Audit trail (fire-and-forget)
+                  dbWriter?.writeApprovalEvent({
+                    requestId,
+                    action: action === 'approve' ? 'approved' : 'denied',
+                    decidedBy,
+                    notes: parsed.notes,
+                  }).catch(() => {});
+                } else {
+                  sendJsonError(res, 404, `Approval request not found or not pending`, 'not_found');
+                }
+              } catch {
+                sendJsonError(res, 400, 'Invalid JSON body', 'invalid_request');
+              }
+            })();
+          });
+          return;
+        }
+      }
+
+      // Policy management API endpoints
+      if (url.startsWith('/api/policies') && policyEngine) {
+        handlePolicyApi(req, res, policyEngine, policiesFile ?? '');
         return;
       }
 
@@ -377,8 +499,50 @@ export function startServer(
       const bodyChunks: Buffer[] = [];
       req.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
       req.on('end', () => {
+        // Wrap in async IIFE to support approval token validation (DB query)
+        (async () => {
         const bodyBuffer = Buffer.concat(bodyChunks);
         const bodyString = bodyBuffer.length > 0 ? bodyBuffer.toString('utf8') : undefined;
+
+        // Approval token bypass: if X-Govyn-Approval header is present, validate and skip policies
+        const approvalToken = req.headers['x-govyn-approval'] as string | undefined;
+        if (approvalToken && approvalManager) {
+          try {
+            const tokenResult = await approvalManager.validateAndConsumeToken(approvalToken);
+            if (tokenResult) {
+              // Token is valid — skip policy evaluation, forward request directly
+              dbWriter?.writeApprovalEvent({
+                requestId: approvalToken,
+                action: 'token_consumed',
+              }).catch(() => {});
+
+              await forwardRequest(
+                req,
+                res,
+                routeMatch,
+                agentIdentity.agentId,
+                pricingTable,
+                aggregator,
+                budgetWarning,
+                loopDetector,
+                enforcer,
+                actionLogger,
+                bodyBuffer,
+                undefined,
+                undefined,
+                dbWriter,
+              );
+              return;
+            } else {
+              // Invalid/expired/used token
+              sendJsonError(res, 403, 'Invalid or expired approval token', 'invalid_approval_token');
+              return;
+            }
+          } catch {
+            sendJsonError(res, 500, 'Failed to validate approval token', 'internal_error');
+            return;
+          }
+        }
 
         // Evaluate policies (between route matching and forwarding)
         let requestedModel = extractModelFromBody(bodyString);
@@ -446,6 +610,19 @@ export function startServer(
               allowed: false,
             });
 
+            // DB persistence for policy evaluation (fire-and-forget)
+            dbWriter?.writePolicyEvaluation({
+              agentId: agentIdentity.agentId,
+              provider: routeMatch.providerType,
+              path: routeMatch.upstreamPath,
+              allowed: false,
+              evaluatedCount: policyResult.evaluatedCount,
+              matchedCount: policyResult.matchedCount,
+              deniedBy: denied.policyName,
+              deniedReason: denied.reason,
+              evaluationTimeMs: policyResult.evaluationTimeMs,
+            }).catch(() => {});
+
             // Log policy-denied request in action logs
             if (actionLogger) {
               const logEntry: LogEntry = {
@@ -489,6 +666,76 @@ export function startServer(
             allowed: true,
           });
 
+          // DB persistence for policy evaluation (fire-and-forget)
+          dbWriter?.writePolicyEvaluation({
+            agentId: agentIdentity.agentId,
+            provider: routeMatch.providerType,
+            path: routeMatch.upstreamPath,
+            allowed: true,
+            evaluatedCount: policyResult.evaluatedCount,
+            matchedCount: policyResult.matchedCount,
+            evaluationTimeMs: policyResult.evaluationTimeMs,
+          }).catch(() => {});
+
+          // Check for require_approval results (only if request would otherwise be allowed)
+          const approvalResult = policyResult.results.find(
+            (r) => r.policyType === 'require_approval' && (r as ApprovalPolicyResult).requiresApproval,
+          ) as ApprovalPolicyResult | undefined;
+
+          if (approvalResult && approvalManager) {
+            try {
+              // Check DB availability (approvals ALWAYS require DB, even in fail-open)
+              const dbAvailable = await dbWriter?.isAvailable();
+              if (!dbAvailable) {
+                sendJsonError(res, 503, 'Approval required but database is unavailable', 'approval_db_unavailable');
+                return;
+              }
+
+              // Generate request summary
+              const summary = generateRequestSummary(bodyString, 500);
+
+              // Create approval request in DB
+              const approval = await approvalManager.createApprovalRequest({
+                agentId: agentIdentity.agentId,
+                provider: routeMatch.providerType,
+                model: extractModelFromBody(bodyString),
+                targetPath: routeMatch.upstreamPath,
+                policyName: approvalResult.policyName,
+                estimatedCost: undefined,
+                requestSummary: summary,
+                requestPayload: approvalResult.storePayload ? JSON.parse(bodyString ?? '{}') : undefined,
+                timeoutSeconds: approvalResult.timeoutSeconds,
+              });
+
+              // Return HTTP 202 Accepted with polling info
+              const responseBody = JSON.stringify({
+                status: 'approval_required',
+                approval_id: approval.id,
+                polling_url: approval.pollingUrl,
+                expires_at: approval.expiresAt,
+                message: approvalResult.message ?? `Request requires human approval (policy: ${approvalResult.policyName})`,
+              });
+              res.writeHead(202, {
+                'content-type': 'application/json',
+                'content-length': Buffer.byteLength(responseBody).toString(),
+                'location': approval.pollingUrl,
+              });
+              res.end(responseBody);
+
+              // Audit trail (fire-and-forget)
+              dbWriter?.writeApprovalEvent({
+                requestId: approval.id,
+                action: 'created',
+              }).catch(() => {});
+
+              return;
+            } catch (err) {
+              const errMsg = err instanceof Error ? err.message : 'Unknown error';
+              sendJsonError(res, 500, `Failed to create approval request: ${errMsg}`, 'internal_error');
+              return;
+            }
+          }
+
           // Check for model_route results with routeTo
           const routeResult = policyResult.results.find(
             (r) => r.policyType === 'model_route' && (r as ModelRouteResult).routeTo,
@@ -522,7 +769,7 @@ export function startServer(
         // Forward the request to the upstream provider, attributing cost to the resolved agent.
         // Pass finalBodyBuffer (rewritten or original) to avoid re-reading the consumed stream.
         // Pass requestedModel so cost tracking records original model before routing.
-        forwardRequest(
+        await forwardRequest(
           req,
           res,
           routeMatch,
@@ -536,7 +783,9 @@ export function startServer(
           finalBodyBuffer,
           requestedModel !== actualModel ? requestedModel : undefined,
           policyResult,  // pass the evaluation result for action log enrichment
-        ).catch((err: unknown) => {
+          dbWriter,
+        );
+        })().catch((err: unknown) => {
           const message = err instanceof Error ? err.message : 'Unknown error';
           console.error('[server] unhandled forwarding error:', message);
           if (!res.headersSent) {

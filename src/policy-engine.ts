@@ -34,6 +34,8 @@ import type {
   TimeWindowPolicy,
   ModelRoutePolicy,
   ModelRouteResult,
+  RequireApprovalPolicy,
+  ApprovalPolicyResult,
 } from './policy-types.js';
 
 /** Evaluation options for testability (e.g., injectable timestamp). */
@@ -727,6 +729,93 @@ function evaluateModelRoute(
   return baseResult;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Require approval evaluator
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Evaluate a require_approval policy against a request context.
+ *
+ * Uses the same AND-match logic as block policies. If all match criteria
+ * match, returns a result with requiresApproval: true (and allowed: false
+ * to signal interception). If criteria don't match, returns allowed: true
+ * (pass through).
+ */
+function evaluateRequireApproval(
+  policy: RequireApprovalPolicy,
+  context: PolicyRequestContext,
+): SinglePolicyResult | ApprovalPolicyResult {
+  const match = policy.match;
+
+  // No match criteria = unconditional approval requirement
+  if (!match) {
+    return {
+      policyName: policy.name,
+      policyType: 'require_approval',
+      allowed: false,
+      requiresApproval: true,
+      timeoutSeconds: policy.timeout_seconds ?? 1800,
+      storePayload: policy.store_payload ?? false,
+      reason: 'Request requires human approval',
+      message: policy.message,
+    } as ApprovalPolicyResult;
+  }
+
+  const useRegex = match.regex === true;
+
+  // AND logic: all specified criteria must match for approval requirement.
+
+  if (match.provider !== undefined) {
+    if (match.provider !== context.provider) {
+      return { policyName: policy.name, policyType: 'require_approval', allowed: true };
+    }
+  }
+
+  if (match.action_type !== undefined) {
+    const actionType = inferActionType(context.path);
+    if (match.action_type !== actionType) {
+      return { policyName: policy.name, policyType: 'require_approval', allowed: true };
+    }
+  }
+
+  if (match.model !== undefined) {
+    const contextModel = context.model ?? '';
+    if (useRegex) {
+      if (!new RegExp(match.model).test(contextModel)) {
+        return { policyName: policy.name, policyType: 'require_approval', allowed: true };
+      }
+    } else {
+      if (match.model !== contextModel) {
+        return { policyName: policy.name, policyType: 'require_approval', allowed: true };
+      }
+    }
+  }
+
+  if (match.path !== undefined) {
+    if (useRegex) {
+      if (!new RegExp(match.path).test(context.path)) {
+        return { policyName: policy.name, policyType: 'require_approval', allowed: true };
+      }
+    } else {
+      if (match.path !== context.path) {
+        return { policyName: policy.name, policyType: 'require_approval', allowed: true };
+      }
+    }
+  }
+
+  // All criteria matched -> requires approval
+  return {
+    policyName: policy.name,
+    policyType: 'require_approval',
+    allowed: false,
+    requiresApproval: true,
+    timeoutSeconds: policy.timeout_seconds ?? 1800,
+    storePayload: policy.store_payload ?? false,
+    reason: 'Request requires human approval',
+    message: policy.message,
+  } as ApprovalPolicyResult;
+}
+
 /**
  * Dispatch to the correct type-specific evaluator for a policy.
  */
@@ -750,6 +839,8 @@ function evaluatePolicy(
       return evaluateTimeWindow(policy, context, now !== undefined ? new Date(now) : undefined);
     case 'model_route':
       return evaluateModelRoute(policy, context, now);
+    case 'require_approval':
+      return evaluateRequireApproval(policy, context);
   }
 }
 
@@ -858,14 +949,22 @@ export class PolicyEngine {
       );
       results.push(singleResult);
 
-      // Track first denial (most-restrictive-wins)
+      // Track first denial (most-restrictive-wins).
+      // require_approval results have allowed=false but are NOT denials —
+      // they signal "hold for approval". Only track non-approval denials here.
       if (!singleResult.allowed && denied === undefined) {
-        denied = singleResult;
+        const isApprovalHold = singleResult.policyType === 'require_approval'
+          && (singleResult as ApprovalPolicyResult).requiresApproval;
+        if (!isApprovalHold) {
+          denied = singleResult;
+        }
       }
     }
 
     const evaluationTimeMs = performance.now() - start;
 
+    // If a real deny policy triggered, that takes precedence over any approval holds.
+    // The caller checks results for require_approval only when allowed=true (no denials).
     return {
       allowed: denied === undefined,
       evaluatedCount,

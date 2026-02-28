@@ -5,8 +5,8 @@
  * results of parsing/validating them.
  */
 
-/** The six policy types supported by Govyn (Phase 6 defines skeletons; Phase 7 adds evaluators) */
-export type PolicyType = 'block' | 'rate_limit' | 'budget_limit' | 'content_filter' | 'time_window' | 'model_route';
+/** The seven policy types supported by Govyn (Phase 6 defines skeletons; Phase 7 adds evaluators; Phase 10 adds require_approval) */
+export type PolicyType = 'block' | 'rate_limit' | 'budget_limit' | 'content_filter' | 'time_window' | 'model_route' | 'require_approval';
 
 /** Policy scope — determines which requests a policy applies to */
 export interface PolicyScope {
@@ -103,8 +103,23 @@ export interface ModelRoutePolicy extends PolicyBase {
   routing_opt_out_agents?: string[];         // agents that skip routing entirely (passthrough)
 }
 
+/** Require approval policy — flags matching requests for human approval before forwarding */
+export interface RequireApprovalPolicy extends PolicyBase {
+  type: 'require_approval';
+  match?: {
+    provider?: string;     // target provider name (literal match)
+    model?: string;        // model name (literal or regex)
+    action_type?: string;  // inferred action type: 'chat', 'embedding', etc.
+    path?: string;         // target path pattern (literal or regex)
+    regex?: boolean;       // if true, path/model patterns are regex; default false (literal)
+  };
+  timeout_seconds?: number;  // Default 1800 (30 min)
+  store_payload?: boolean;   // Default false (metadata-only per CONTEXT.md)
+  message?: string;
+}
+
 /** Union type of all policy variants */
-export type Policy = BlockPolicy | RateLimitPolicy | BudgetLimitPolicy | ContentFilterPolicy | TimeWindowPolicy | ModelRoutePolicy;
+export type Policy = BlockPolicy | RateLimitPolicy | BudgetLimitPolicy | ContentFilterPolicy | TimeWindowPolicy | ModelRoutePolicy | RequireApprovalPolicy;
 
 /** Context about the current request, passed to the engine for evaluation */
 export interface PolicyRequestContext {
@@ -159,6 +174,17 @@ export interface ModelRouteResult extends SinglePolicyResult {
   requestedModel?: string;
   /** The rule index that matched (for logging) */
   matchedRuleIndex?: number;
+}
+
+/** Result extension for require_approval evaluations */
+export interface ApprovalPolicyResult extends SinglePolicyResult {
+  policyType: 'require_approval';
+  /** Whether this request requires human approval */
+  requiresApproval: true;
+  /** Timeout in seconds before auto-deny */
+  timeoutSeconds: number;
+  /** Whether to store the full request payload */
+  storePayload: boolean;
 }
 
 /** Aggregate result of evaluating all matching policies */

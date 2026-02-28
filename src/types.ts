@@ -278,6 +278,22 @@ export interface LoggingConfig {
 }
 
 /**
+ * Database persistence configuration.
+ * When defined, the proxy writes cost records and policy evaluations to PostgreSQL.
+ * When undefined, the proxy runs without database persistence (same as v1.1).
+ */
+export interface DatabaseConfig {
+  /** PostgreSQL connection URL (postgres://...) */
+  url: string;
+  /** Whether to continue proxying when DB is unavailable (default: true) */
+  failOpen: boolean;
+  /** Days to retain cost records and policy evaluations before cleanup (default: 90) */
+  retentionDays: number;
+  /** Days to retain approval request records before cleanup (default: 365) */
+  approvalRetentionDays: number;
+}
+
+/**
  * Overall proxy server configuration.
  */
 export interface ProxyConfig {
@@ -297,4 +313,6 @@ export interface ProxyConfig {
   logging?: LoggingConfig;
   /** Path to the YAML policy file (optional — no policies if not set) */
   policiesFile?: string;
+  /** Database persistence configuration (optional — no DB if not set) */
+  database?: DatabaseConfig;
 }

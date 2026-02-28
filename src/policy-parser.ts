@@ -17,7 +17,7 @@ import type {
 
 /** All valid policy types */
 const VALID_POLICY_TYPES: ReadonlySet<string> = new Set<PolicyType>([
-  'block', 'rate_limit', 'budget_limit', 'content_filter', 'time_window', 'model_route',
+  'block', 'rate_limit', 'budget_limit', 'content_filter', 'time_window', 'model_route', 'require_approval',
 ]);
 
 /**
@@ -520,6 +520,46 @@ export function parsePolicies(yamlString: string): PolicyParseResult {
           ...(model_aliases !== undefined ? { model_aliases } : {}),
           ...(max_downgrade_level !== undefined ? { max_downgrade_level } : {}),
           ...(routing_opt_out_agents !== undefined ? { routing_opt_out_agents } : {}),
+        };
+        break;
+      }
+      case 'require_approval': {
+        const match = getMapValue(policyMap, 'match') as Record<string, unknown> | undefined;
+        const message = getMapValue(policyMap, 'message') as string | undefined;
+        const timeout_seconds = getMapValue(policyMap, 'timeout_seconds') as number | undefined;
+        const store_payload = getMapValue(policyMap, 'store_payload') as boolean | undefined;
+
+        // Validate timeout_seconds if present
+        if (timeout_seconds !== undefined && timeout_seconds !== null) {
+          if (typeof timeout_seconds !== 'number' || !Number.isInteger(timeout_seconds) || timeout_seconds <= 0) {
+            const fieldNode = getMapNode(policyMap, 'timeout_seconds');
+            errors.push({
+              message: `Policy "${name}": "timeout_seconds" must be a positive integer.`,
+              line: fieldNode ? getNodeLine(yamlString, fieldNode) : policyLine,
+              policyName: name,
+            });
+            continue;
+          }
+        }
+
+        // Validate store_payload if present
+        if (store_payload !== undefined && store_payload !== null && typeof store_payload !== 'boolean') {
+          const fieldNode = getMapNode(policyMap, 'store_payload');
+          errors.push({
+            message: `Policy "${name}": "store_payload" must be a boolean.`,
+            line: fieldNode ? getNodeLine(yamlString, fieldNode) : policyLine,
+            policyName: name,
+          });
+          continue;
+        }
+
+        policy = {
+          ...base,
+          type: 'require_approval',
+          ...(match !== undefined ? { match } : {}),
+          ...(message !== undefined ? { message } : {}),
+          ...(timeout_seconds !== undefined ? { timeout_seconds } : {}),
+          ...(store_payload !== undefined ? { store_payload } : {}),
         };
         break;
       }

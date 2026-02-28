@@ -13,12 +13,18 @@ import { LoopDetector } from './loop-detector.js';
 import { ActionLogger } from './action-logger.js';
 import { PolicyEngine } from './policy-engine.js';
 import { PolicyWatcher } from './policy-watcher.js';
+import { createPool, runMigrations } from './db.js';
+import { DbWriter } from './db-writer.js';
+import { RetentionManager } from './db-retention.js';
+import { ApprovalManager } from './approval.js';
+import { ApprovalTimeoutChecker } from './approval-timeout.js';
+import { AlertManager } from './alert-manager.js';
 import type { LoopDetectionConfig, LoggingConfig } from './types.js';
 
 // Support --config <path> CLI flag
 const configPath = process.argv.find((a, i) => process.argv[i - 1] === '--config');
 
-try {
+async function main(): Promise<void> {
   const config = loadConfig(configPath);
 
   // Create shared cost aggregator (in-memory for Phase 2)
@@ -93,9 +99,67 @@ try {
     console.log(`[govyn] Watching policy file for changes: ${config.policiesFile}`);
   }
 
-  startServer(config, aggregator, budgetEnforcer, loopDetector, actionLogger, policyEngine);
-} catch (err) {
+  // Initialize database persistence (optional — proxy runs without DB if not configured)
+  let dbWriter: DbWriter | undefined;
+  let approvalManager: ApprovalManager | undefined;
+  let approvalTimeoutChecker: ApprovalTimeoutChecker | undefined;
+  let alertManager: AlertManager | undefined;
+  let sql: ReturnType<typeof createPool> | undefined;
+  if (config.database) {
+    try {
+      sql = createPool(config.database.url);
+      await runMigrations(sql);
+      console.log('[govyn] Database connected and migrations applied');
+
+      dbWriter = new DbWriter(sql, config.database.failOpen);
+
+      // Create approval manager and timeout checker
+      approvalManager = new ApprovalManager(sql);
+      approvalTimeoutChecker = new ApprovalTimeoutChecker(sql);
+      approvalTimeoutChecker.start();
+      console.log('[govyn] Approval queue enabled (timeout checker running)');
+
+      // Create and start alert manager
+      alertManager = new AlertManager(sql);
+      await alertManager.start();
+      console.log('[govyn] Alert manager started');
+
+      // Start retention cleanup on an interval (every 6 hours, unref'd)
+      const retentionManager = new RetentionManager(
+        sql,
+        config.database.retentionDays,
+        config.database.approvalRetentionDays,
+      );
+      const retentionInterval = setInterval(() => {
+        retentionManager.runAll().catch(() => {});
+      }, 6 * 60 * 60 * 1000);
+      retentionInterval.unref();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (config.database.failOpen) {
+        console.error(`[govyn] Database connection failed (fail-open, continuing without persistence): ${message}`);
+      } else {
+        throw new Error(`Database connection failed (fail-closed): ${message}`);
+      }
+    }
+  } else {
+    console.log('[govyn] No database configured — running without persistence');
+  }
+
+  // Graceful shutdown: stop the approval timeout checker on process exit
+  const handleShutdown = () => {
+    approvalTimeoutChecker?.stop();
+    alertManager?.stop();
+    process.exit(0);
+  };
+  process.on('SIGTERM', handleShutdown);
+  process.on('SIGINT', handleShutdown);
+
+  startServer(config, aggregator, budgetEnforcer, loopDetector, actionLogger, policyEngine, dbWriter, approvalManager, config.policiesFile, sql, alertManager);
+}
+
+main().catch((err) => {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`[govyn] Failed to start: ${message}`);
   process.exit(1);
-}
+});

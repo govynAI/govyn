@@ -28,6 +28,7 @@ import type { LoopDetector } from './loop-detector.js';
 import type { BudgetEnforcer } from './budget-enforcer.js';
 import type { ActionLogger } from './action-logger.js';
 import { govynEvents } from './events.js';
+import type { DbWriter } from './db-writer.js';
 
 /**
  * Select the appropriate header mapping function based on provider type.
@@ -147,6 +148,7 @@ export async function forwardRequest(
   bufferedBody?: Buffer,
   requestedModel?: string,
   policyResult?: { allowed: boolean; evaluatedCount: number; matchedCount: number; evaluationTimeMs: number },
+  dbWriter?: DbWriter,
 ): Promise<void> {
   const requestStart = Date.now();
   const { provider, upstreamPath } = routeMatch;
@@ -314,7 +316,7 @@ export async function forwardRequest(
           let costResult: { inputCost: number; outputCost: number; totalCost: number; priced: boolean } | undefined;
           if (usage) {
             costResult = calculateCost(usage, pricingTable);
-            aggregator.recordCost({
+            const costRecord = {
               agentId,
               model: usage.model,
               provider: routeMatch.providerType,
@@ -326,7 +328,12 @@ export async function forwardRequest(
               priced: costResult.priced,
               timestamp: Date.now(),
               requestedModel: requestedModel ?? undefined,
-            });
+            };
+            aggregator.recordCost(costRecord);
+
+            // DB persistence (fire-and-forget, parallel with in-memory + JSONL)
+            dbWriter?.writeCostRecord(costRecord).catch(() => {});
+
             const totalTokens = usage.inputTokens + usage.outputTokens;
             console.log(
               `[govyn] Cost: agent=${agentId} model=${usage.model} tokens=${totalTokens} cost=$${costResult.totalCost.toFixed(6)} priced=${costResult.priced}`,
@@ -403,7 +410,7 @@ export async function forwardRequest(
           let costResult: { inputCost: number; outputCost: number; totalCost: number; priced: boolean } | undefined;
           if (usage) {
             costResult = calculateCost(usage, pricingTable);
-            aggregator.recordCost({
+            const costRecord = {
               agentId,
               model: usage.model,
               provider: routeMatch.providerType,
@@ -415,7 +422,12 @@ export async function forwardRequest(
               priced: costResult.priced,
               timestamp: Date.now(),
               requestedModel: requestedModel ?? undefined,
-            });
+            };
+            aggregator.recordCost(costRecord);
+
+            // DB persistence (fire-and-forget, parallel with in-memory + JSONL)
+            dbWriter?.writeCostRecord(costRecord).catch(() => {});
+
             const totalTokens = usage.inputTokens + usage.outputTokens;
             console.log(
               `[govyn] Cost: agent=${agentId} model=${usage.model} tokens=${totalTokens} cost=$${costResult.totalCost.toFixed(6)} priced=${costResult.priced}`,

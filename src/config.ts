@@ -8,7 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { ProxyConfig, ProviderConfig, AgentConfig, BudgetConfig, LoopDetectionConfig, LoggingConfig, LoggingMode } from './types.js';
+import type { ProxyConfig, ProviderConfig, AgentConfig, BudgetConfig, LoopDetectionConfig, LoggingConfig, LoggingMode, DatabaseConfig } from './types.js';
 import { loadPricing } from './pricing.js';
 
 /**
@@ -41,6 +41,12 @@ interface RawConfig {
     soft_warning_percent?: number;
   } | null>;
   policies_file?: string;
+  database?: {
+    url?: string;
+    fail_open?: boolean;
+    retention_days?: number;
+    approval_retention_days?: number;
+  };
   logging?: {
     enabled?: boolean;
     directory?: string;
@@ -235,6 +241,18 @@ export function loadConfig(filePath?: string): ProxyConfig {
     };
   }
 
+  // Parse database section (optional — no DB persistence if missing)
+  let database: DatabaseConfig | undefined;
+  const dbUrl = process.env['GOVYN_DATABASE_URL'] ?? cfg.database?.url;
+  if (dbUrl && typeof dbUrl === 'string' && dbUrl.length > 0) {
+    database = {
+      url: dbUrl,
+      failOpen: cfg.database?.fail_open ?? true,
+      retentionDays: cfg.database?.retention_days ?? 90,
+      approvalRetentionDays: cfg.database?.approval_retention_days ?? 365,
+    };
+  }
+
   // Parse policies_file (optional path to policy YAML)
   const policiesFile = typeof cfg.policies_file === 'string' ? cfg.policies_file : undefined;
   if (policiesFile) {
@@ -250,6 +268,7 @@ export function loadConfig(filePath?: string): ProxyConfig {
     budgets,
     ...(logging ? { logging } : {}),
     ...(policiesFile ? { policiesFile } : {}),
+    ...(database ? { database } : {}),
   };
 
   console.log(`[govyn] Loaded config from ${absolutePath}`);

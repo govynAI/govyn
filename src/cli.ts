@@ -186,7 +186,7 @@ function startProxy(): void {
       console.log(`[govyn] Watching policy file for changes: ${config.policiesFile}`);
     }
 
-    startServer(config, aggregator, budgetEnforcer, loopDetector, actionLogger, policyEngine);
+    startServer(config, aggregator, budgetEnforcer, loopDetector, actionLogger, policyEngine, undefined, undefined, config.policiesFile);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[govyn] Failed to start: ${message}`);

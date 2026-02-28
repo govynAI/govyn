@@ -4,7 +4,7 @@
  * Returns per-agent, per-model, and per-period cost summaries from the
  * in-memory CostAggregator. Supports query parameters for filtering:
  *   ?agent=<agentId>   — filter to a specific agent
- *   ?period=<period>   — 'hour', 'day'/'today', 'month', 'all' (default: 'all')
+ *   ?period=<period>   — 'hour', 'day'/'today', 'week', 'month', 'all' (default: 'all')
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -66,6 +66,7 @@ export function handleCostApi(
       break;
     case 'hour':
     case 'day':
+    case 'week':
     case 'month':
     case 'all':
       period = periodParam;

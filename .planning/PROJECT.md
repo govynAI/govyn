@@ -8,6 +8,8 @@ Shipped v1.0: transparent HTTP proxy with per-agent cost tracking, budget enforc
 
 Shipped v1.1: YAML policy-as-code engine with 6 rule types (block, rate_limit, budget_limit, content_filter, time_window, model_route), in-memory evaluation (<5ms for 100 policies), hot reload, CLI validation, and 11 pre-built templates.
 
+Shipped v1.2: Full-stack governance dashboard — React + TypeScript + Tailwind with Clerk auth, PostgreSQL persistence, cost monitoring with per-agent drill-down, policy management with in-browser YAML editor, human-in-the-loop approval queue with HTTP 202 polling, and webhook-based alert configuration.
+
 ## Core Value
 
 Agents never hold real API keys. The proxy holds credentials and enforces governance at the infrastructure level — not the prompt level. If the proxy blocks an action, the agent has no alternative path to the real API.
@@ -33,15 +35,18 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 - ✓ Hot reload: file-watch with <1s detection, atomic policy swap, invalid-change rejection — v1.1
 - ✓ `govyn policy validate` CLI command with line-number error reporting — v1.1
 - ✓ 11 pre-built policy templates (production-safety, budget-control, pii-protection, business-hours-only, etc.) — v1.1
+- ✓ React + TypeScript + Tailwind dashboard with Clerk auth (sign up, sign in, sign out) — v1.2
+- ✓ PostgreSQL persistence via Neon with fire-and-forget writes, versioned migrations, retention management — v1.2
+- ✓ Cost overview with per-agent drill-down, budget status indicators, Recharts time-series charts — v1.2
+- ✓ Policy management UI with CodeMirror 6 YAML editor, live validation, 7 type-specific templates — v1.2
+- ✓ Human-in-the-loop approval queue — HTTP 202 + polling, dashboard approve/deny with notes, audit trail — v1.2
+- ✓ Alert configuration with budget threshold and policy trigger rules, webhook delivery, alert history — v1.2
 
-### Active (v1.2)
+### Active (v1.3)
 
-- [ ] React + TypeScript + Tailwind dashboard as separate app with Clerk auth
-- [ ] PostgreSQL persistence via Neon (proxy writes cost/log/policy data to DB)
-- [ ] Cost overview with per-agent drill-down, budget status indicators, time-series charts
-- [ ] Policy management UI (list, visual editor, dry-run testing, version history)
-- [ ] Human-in-the-loop approval queue — full stack (proxy HTTP 202 + polling backend + dashboard approve/deny/notes UI)
-- [ ] Alert configuration (email/webhook on budget thresholds, policy triggers)
+- [ ] Session replay with step-through and comparison views
+- [ ] Anomaly detection (cost spikes, error loops, deviation alerting)
+- [ ] Python SDK and Node.js SDK (drop-in replacements for openai/anthropic clients)
 
 ### Future
 
@@ -62,21 +67,15 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 - Native mobile apps — web dashboard first
 - Competing with Agentgateway/Solo.io on Kubernetes/MCP/A2A enterprise infrastructure — different buyer, different stack, different price point
 
-## Current Milestone: v1.2 Dashboard & Governance Platform
+## Current State
 
-**Goal:** Turn Govyn from a CLI-only proxy into a visual governance platform where both devs and team leads can monitor costs, manage policies, approve agent actions, and configure alerts.
+Shipped v1.2 Dashboard & Governance Platform. Govyn is now a full-stack governance product with proxy + dashboard + persistence.
 
-**Target features:**
-- Separate React + TypeScript + Tailwind dashboard with Clerk auth
-- PostgreSQL (Neon) persistence — proxy writes cost/log/policy data
-- Cost overview with per-agent drill-down, budget status, time-series charts
-- Policy management UI with visual editor, dry-run testing, version history
-- Approval queue full stack — proxy HTTP 202 + polling, dashboard approve/deny/notes
-- Alert configuration — email/webhook on budget thresholds and policy triggers
+**Next milestone:** v1.3 Advanced Features — session replay, anomaly detection, framework SDKs
 
 ## Context
 
-**Current state:** Shipped v1.1 Policy Engine with 23,696 LOC TypeScript. Tech stack: Node.js/TypeScript proxy, Vitest, YAML config. Docker + npm packaging. 531 tests (unit, integration, load). Policy engine evaluates 6 rule types in-memory with <5ms for 100 policies. Hot reload detects file changes in <1s. 11 pre-built policy templates. `govyn policy validate` CLI command.
+**Current state:** Shipped v1.2 Dashboard & Governance Platform with 35,724 LOC TypeScript. Tech stack: Node.js/TypeScript proxy, React + TypeScript + Tailwind dashboard, PostgreSQL (Neon), Clerk auth, Vitest, YAML config. Docker + npm packaging. Full governance dashboard with cost monitoring, policy management, approval queue, and alert configuration.
 
 **Market position:** No proxy-architecture governance product exists for non-enterprise teams. All direct competitors (AgentBudget, TealTiger, AgentGuard47, Coralogix, AgentOps) use SDK/wrapper models where real API keys remain in the agent's environment. The proxy model is architecturally unbypassable — "a wall, not a door lock."
 
@@ -126,6 +125,15 @@ Agents never hold real API keys. The proxy holds credentials and enforces govern
 | fs.watch() over chokidar/fs.watchFile | Event-driven sub-second detection with zero dependencies | ✓ Good — <1s reload, handles cross-OS editor quirks |
 | Model route never denies | Routing is optimization, not enforcement — always allowed:true, routes or passes through | ✓ Good — clean separation from deny-type policies |
 | Token estimation via chars/4 | No external tokenizer dependency; sufficient accuracy for routing criteria | ✓ Good — simple, fast, no dependency |
+| Dashboard as separate React app | UI iteration independent of proxy; monorepo with separate build (ADR-010) | ✓ Good — rapid dashboard dev without touching proxy |
+| PostgreSQL via Neon | Structured queries, JSONB, time-series aggregation (ADR-012) | ✓ Good — fire-and-forget writes, zero proxy latency impact |
+| Clerk auth for dashboard | Managed auth, social login, minimal setup | ✓ Good — sign up/in/out working, team-ready |
+| Async approval queue (HTTP 202 + polling) | CF Workers can't hold connections; universal deployment pattern (ADR-017) | ✓ Good — full lifecycle working (request → poll → approve/deny → re-send) |
+| Webhook-only alerts (no email) | Email adds SMTP/provider complexity; webhook covers automation use cases | ✓ Good — webhook delivery with cooldown, extensible |
+| postgres (porsager/postgres) | ESM-native, zero-dependency PostgreSQL client | ✓ Good — clean ESM imports, simple API |
+| Fire-and-forget DB writes | Proxy latency is sacred; losing a log entry is acceptable | ✓ Good — 0ms added latency with full persistence |
+| CodeMirror 6 for YAML editor | Lightweight, extensible, theme-able via CSS variables | ✓ Good — syntax highlighting, inline lint markers, scrollToLine |
+| Tailwind v4 via Vite plugin | No PostCSS config needed, future-proof | ⚠️ Revisit — shadcn/ui doesn't natively support v4 yet |
 
 ---
-*Last updated: 2026-02-26 after v1.2 milestone start*
+*Last updated: 2026-02-28 after v1.2 milestone*

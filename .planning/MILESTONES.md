@@ -48,3 +48,26 @@
 
 ---
 
+
+## v1.2 Dashboard & Governance Platform (Shipped: 2026-02-28)
+
+**Phases completed:** 6 phases, 14 plans
+**Timeline:** 3 days (2026-02-26 → 2026-02-28)
+**Codebase:** 35,724 LOC TypeScript, 93 files changed (+15,750 lines)
+**Git range:** 553b2ad → ae0d9f7
+
+**Delivered:** A full-stack governance dashboard — React + TypeScript + Tailwind with Clerk auth, PostgreSQL persistence, cost monitoring with per-agent drill-down, policy management with in-browser YAML editor, human-in-the-loop approval queue, and webhook-based alert configuration.
+
+**Key accomplishments:**
+- PostgreSQL persistence with fire-and-forget writes, versioned migrations, retention management with daily cost aggregation
+- Human-in-the-loop approval queue with HTTP 202 polling, approve/deny modal with notes, auto-refresh, and decision audit trail
+- React + TypeScript + Tailwind dashboard with Clerk auth, responsive sidebar navigation, dark/light theming, and 3-state proxy connection management
+- Cost overview with per-agent drill-down, Recharts time-series charts, budget health indicators (OK/Warning/Exceeded), and model breakdown tables
+- Policy management UI with CodeMirror 6 YAML editor, live validation with inline error markers, 7 type-specific templates, and toast notifications
+- Alert configuration with budget threshold and policy trigger rules, webhook delivery with cooldown enforcement, and paginated alert history
+
+**Archives:**
+- [v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
+- [v1.2-REQUIREMENTS.md](milestones/v1.2-REQUIREMENTS.md)
+
+---

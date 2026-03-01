@@ -1,9 +1,10 @@
-"""Govyn AI governance proxy SDK."""
+"""govynai - Python SDK for the Govyn AI agent governance proxy."""
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+from ._errors import GovynBudgetExceededError, GovynError, GovynLoopDetectedError
 
+__version__ = "0.1.0"
 __all__ = [
     "GovynOpenAI",
     "GovynAsyncOpenAI",
@@ -14,9 +15,6 @@ __all__ = [
     "GovynLoopDetectedError",
     "check_proxy",
 ]
-
-# Eager imports -- always available
-from ._errors import GovynBudgetExceededError, GovynError, GovynLoopDetectedError
 
 
 def __getattr__(name: str):
@@ -37,9 +35,9 @@ def __getattr__(name: str):
         return globals()[name]
 
     if name == "check_proxy":
-        from ._health import check_proxy
+        from ._health import check_proxy as _check_proxy
 
-        globals()["check_proxy"] = check_proxy
-        return check_proxy
+        globals()["check_proxy"] = _check_proxy
+        return _check_proxy
 
     raise AttributeError(f"module 'govynai' has no attribute {name!r}")

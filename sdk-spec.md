@@ -178,3 +178,235 @@ class GovynOpenAI(OpenAI):
 ```
 
 The same pattern applies to `GovynAnthropic`, `GovynAsyncOpenAI`, and `GovynAsyncAnthropic`, changing only the route prefix (`/v1/anthropic` for Anthropic wrappers).
+
+---
+
+## 6. Error Response Parsing
+
+The proxy returns structured JSON error responses when governance rules block a request. SDKs MUST parse these responses and raise typed exceptions.
+
+### Error Envelope Format
+
+All governance errors use HTTP status `429` and follow this envelope structure:
+
+```json
+{
+  "error": {
+    "type": "<error_type>",
+    "code": "<error_code>",
+    "message": "<human-readable message>",
+    "details": { ... }
+  }
+}
+```
+
+### Budget Exceeded (HTTP 429)
+
+Returned when an agent exceeds its configured daily or monthly budget limit.
+
+```json
+{
+  "error": {
+    "type": "budget_error",
+    "code": "budget_exceeded_daily",
+    "message": "Agent has exceeded its daily budget limit",
+    "details": {
+      "limit_type": "daily",
+      "limit_amount": 10.00,
+      "current_spend": 10.50,
+      "reset_time": "2026-03-02T00:00:00.000Z",
+      "agent_id": "research-agent"
+    }
+  }
+}
+```
+
+The `code` field can also be `"budget_exceeded_monthly"` with `limit_type: "monthly"`.
+
+**Response headers:** `retry-after: <seconds_until_reset>`
+
+### Loop Detected (HTTP 429)
+
+Returned when the proxy detects repeated identical request patterns from an agent.
+
+```json
+{
+  "error": {
+    "type": "loop_error",
+    "code": "loop_detected",
+    "message": "Agent blocked: repeated identical requests detected",
+    "details": {
+      "agent_id": "research-agent",
+      "cooldown_seconds": 300,
+      "cooldown_expires_at": "2026-03-01T12:05:00.000Z"
+    }
+  }
+}
+```
+
+**Response headers:** `retry-after: <cooldown_seconds>`
+
+### Error Code Enum (Exhaustive for v1.3)
+
+| Code                       | Type            | Description                                    |
+|----------------------------|-----------------|------------------------------------------------|
+| `budget_exceeded_daily`    | `budget_error`  | Daily budget limit reached                     |
+| `budget_exceeded_monthly`  | `budget_error`  | Monthly budget limit reached                   |
+| `loop_detected`            | `loop_error`    | Repeated identical request pattern detected    |
+
+This is the complete list of governance error codes for v1.3. SDKs MUST handle all three.
+
+### Error Parsing Algorithm (Pseudocode)
+
+```
+function parseGovynError(httpStatus, responseBody):
+  if httpStatus != 429:
+    return null  # not a governance error -- pass through
+
+  parsed = JSON.parse(responseBody)
+  error = parsed.error
+  if not error:
+    return null  # not a Govyn error envelope
+
+  code = error.code
+  type = error.type
+
+  if type == "budget_error" and code in ["budget_exceeded_daily", "budget_exceeded_monthly"]:
+    return BudgetExceededError(
+      message=error.message,
+      code=code,
+      limit_type=error.details.limit_type,
+      limit_amount=error.details.limit_amount,
+      current_spend=error.details.current_spend,
+      reset_time=error.details.reset_time,
+      agent_id=error.details.agent_id,
+    )
+
+  if type == "loop_error" and code == "loop_detected":
+    return LoopDetectedError(
+      message=error.message,
+      agent_id=error.details.agent_id,
+      cooldown_seconds=error.details.cooldown_seconds,
+      cooldown_expires_at=error.details.cooldown_expires_at,
+    )
+
+  return null  # unknown governance error -- pass through as-is
+```
+
+### SDK Exception Mapping
+
+| Error Code                 | Python Exception              | Node.js Exception             |
+|----------------------------|-------------------------------|-------------------------------|
+| `budget_exceeded_daily`    | `GovynBudgetExceededError`    | `GovynBudgetExceededError`    |
+| `budget_exceeded_monthly`  | `GovynBudgetExceededError`    | `GovynBudgetExceededError`    |
+| `loop_detected`            | `GovynLoopDetectedError`      | `GovynLoopDetectedError`      |
+
+Both exception types MUST expose the parsed `details` fields as properties (e.g., `error.limit_type`, `error.cooldown_seconds`).
+
+### Future Error Codes (Do NOT Implement in v1.3)
+
+These error types exist in the proxy but are deferred for SDK implementation:
+
+- **HTTP 403** with `type: "govyn_policy_violation"` -- policy engine block. Future requirement ASDK-01. v1.3 SDKs should pass 403 responses through as-is.
+- **`X-Govyn-Budget-Warning` header** -- budget approaching threshold. Future requirement ASDK-02. v1.3 SDKs should not parse or surface this header.
+
+---
+
+## 7. Health Check
+
+The proxy exposes a health endpoint for connectivity verification.
+
+### Endpoint
+
+```
+GET /health
+```
+
+### Response (HTTP 200)
+
+```json
+{
+  "status": "ok",
+  "version": "0.0.1",
+  "uptime_seconds": 123
+}
+```
+
+### SDK Contract
+
+SDKs MUST implement a health check function:
+
+| Language | Function         | Signature                                        |
+|----------|------------------|--------------------------------------------------|
+| Python   | `check_proxy()`  | `def check_proxy(timeout: float = 5.0) -> bool`  |
+| Node.js  | `checkProxy()`   | `async checkProxy(timeout?: number): Promise<boolean>` |
+
+**Behavior:**
+
+1. Send `GET` to `{proxy_url}/health`
+2. Return `true` / `True` if HTTP 200 and response body contains `"status": "ok"`
+3. Return `false` / `False` (or raise, depending on language idiom) otherwise
+4. Timeout is configurable, default: 5 seconds
+
+The health check function SHOULD be available as both an instance method and a standalone utility. As an instance method, it uses the instance's `proxy_url`. As a standalone utility, it accepts `proxy_url` as a parameter.
+
+---
+
+## 8. Behavioral Rules
+
+These rules apply to all SDK wrappers. Violations break the governance model.
+
+### No SDK-Level Retries
+
+`max_retries` MUST be `0`.
+
+**Rationale:** The proxy counts each incoming request independently. SDK retries cause:
+- **Double-billing:** Each retry is counted as a separate billable request in cost tracking.
+- **Loop detection false positives:** Retries look like repeated identical requests, triggering the loop detector.
+
+If the caller needs retry logic, it must be implemented above the SDK layer, with awareness that each retry is a separate governance-tracked request.
+
+### Streaming Passthrough
+
+SDKs MUST NOT buffer streaming responses. The upstream SDK's streaming behavior (SSE for OpenAI, SSE for Anthropic) must be preserved unchanged. The proxy handles SSE passthrough transparently -- the SDK wrapper does not need to do anything special for streaming.
+
+### No URL Manipulation
+
+SDKs MUST NOT modify, normalize, or strip path components from the `base_url` after construction. The exact string computed in the constructor must be passed to the upstream SDK constructor. Any normalization can break the proxy's route matching.
+
+### No Silent Fallbacks
+
+If the proxy is unreachable, let the upstream SDK's connection error propagate. Do NOT fall back to direct API access. The proxy IS the governance layer -- bypassing it defeats the entire purpose.
+
+### Header Preservation
+
+SDKs MUST NOT remove or modify headers set by the proxy on responses. The proxy may include headers like `X-Govyn-Budget-Warning` and `retry-after` that callers may need to inspect.
+
+---
+
+## 9. Naming Conventions (Cross-Language)
+
+Class names are identical across languages for brand consistency. Method and parameter names follow each language's conventions.
+
+| Concept                    | Python                     | Node.js                    |
+|----------------------------|----------------------------|----------------------------|
+| OpenAI wrapper             | `GovynOpenAI`              | `GovynOpenAI`              |
+| Async OpenAI wrapper       | `GovynAsyncOpenAI`         | N/A (Node SDK is async by default) |
+| Anthropic wrapper          | `GovynAnthropic`           | `GovynAnthropic`           |
+| Async Anthropic wrapper    | `GovynAsyncAnthropic`      | N/A                        |
+| Budget error               | `GovynBudgetExceededError`  | `GovynBudgetExceededError` |
+| Loop error                 | `GovynLoopDetectedError`    | `GovynLoopDetectedError`   |
+| Health check               | `check_proxy()`            | `checkProxy()`             |
+| Agent ID param             | `agent_id`                 | `agentId`                  |
+| Proxy URL param            | `proxy_url`                | `proxyUrl`                 |
+| API key param              | `api_key`                  | `apiKey`                   |
+
+**Rule:** Python uses `snake_case` for functions and parameters. Node.js uses `camelCase`. Class names are `PascalCase` and identical across both languages.
+
+---
+
+## 10. Appendix: Specification Changelog
+
+| Version | Date       | Changes                                   |
+|---------|------------|-------------------------------------------|
+| 1.0     | 2026-03-01 | Initial specification for v1.3 milestone  |

@@ -168,7 +168,7 @@ Plans:
 | 13. Policy Management UI | v1.2 | 2/2 | Complete | 2026-02-28 |
 | 14. Approval Queue UI | v1.2 | 2/2 | Complete | 2026-02-28 |
 | 15. Alert Configuration & Delivery | v1.2 | 2/2 | Complete | 2026-02-28 |
-| 16. SDK Specification | v1.3 | 1/1 | Complete | 2026-03-01 |
+| 16. SDK Specification | v1.3 | Complete    | 2026-03-01 | 2026-03-01 |
 | 17. Python SDK | v1.3 | 0/4 | Not started | - |
 | 18. Node.js SDK | v1.3 | 0/2 | Not started | - |
 | 19. Integration Tests | v1.3 | 0/1 | Not started | - |

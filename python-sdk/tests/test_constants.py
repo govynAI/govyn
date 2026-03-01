@@ -59,18 +59,33 @@ def test_py_typed_marker_exists():
 
 
 def test_import_govynai_does_not_import_providers():
-    """Importing govynai should NOT eagerly import openai or anthropic."""
+    """Importing govynai should NOT eagerly import openai or anthropic.
+
+    NOTE: This test uses subprocess because other tests in the same process
+    may have already imported openai/anthropic, making in-process checks unreliable.
+    """
+    import subprocess
     import sys
 
-    # Clear any cached imports
-    for mod in list(sys.modules.keys()):
-        if mod.startswith("govynai"):
-            del sys.modules[mod]
-
-    import govynai  # noqa: F401
-
-    assert "openai" not in sys.modules, "openai was eagerly imported"
-    assert "anthropic" not in sys.modules, "anthropic was eagerly imported"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import govynai; "
+                "has_openai = 'openai' in sys.modules; "
+                "has_anthropic = 'anthropic' in sys.modules; "
+                "print(f'{has_openai},{has_anthropic}')"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"subprocess failed: {result.stderr}"
+    has_openai, has_anthropic = result.stdout.strip().split(",")
+    assert has_openai == "False", "openai was eagerly imported"
+    assert has_anthropic == "False", "anthropic was eagerly imported"
 
 
 def test_govynai_version():
@@ -91,5 +106,6 @@ def test_govynai_all_exports():
         "GovynBudgetExceededError",
         "GovynLoopDetectedError",
         "check_proxy",
+        "async_check_proxy",
     }
     assert set(govynai.__all__) == expected

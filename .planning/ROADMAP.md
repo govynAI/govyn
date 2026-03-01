@@ -75,10 +75,10 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
   1. A spec document exists at `sdk-spec.md` listing the canonical header name (`X-Govyn-Agent`), env vars (`GOVYN_PROXY_URL`, `GOVYN_AGENT_ID`), default proxy URL, and `max_retries=0` requirement
   2. The spec defines the API key convention — placeholder `"govyn-passthrough"` for passthrough mode vs. scoped `gvn_*` keys for key-storage mode, with guidance on which to use
   3. The spec defines all error codes (`budget_exceeded_daily`, `budget_exceeded_monthly`, `loop_detected`) used by both SDKs for typed error parsing
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 16-01: Write sdk-spec.md covering header names, env vars, error codes, URL conventions, API key convention, and max_retries requirement
+- [ ] 16-01: Write sdk-spec.md — constants, URL construction, headers, API key convention, error codes, health check, and behavioral rules
 
 ### Phase 17: Python SDK
 
@@ -168,7 +168,7 @@ Plans:
 | 13. Policy Management UI | v1.2 | 2/2 | Complete | 2026-02-28 |
 | 14. Approval Queue UI | v1.2 | 2/2 | Complete | 2026-02-28 |
 | 15. Alert Configuration & Delivery | v1.2 | 2/2 | Complete | 2026-02-28 |
-| 16. SDK Specification | v1.3 | 0/1 | Not started | - |
+| 16. SDK Specification | v1.3 | 0/1 | Planned | - |
 | 17. Python SDK | v1.3 | 0/4 | Not started | - |
 | 18. Node.js SDK | v1.3 | 0/2 | Not started | - |
 | 19. Integration Tests | v1.3 | 0/1 | Not started | - |

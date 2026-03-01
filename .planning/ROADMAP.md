@@ -58,7 +58,7 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 
 **Milestone Goal:** Python and Node.js drop-in SDK replacements for openai/anthropic clients, routing all LLM calls through the Govyn proxy with per-agent identification, typed governance errors, integration tests, and LangChain/CrewAI support.
 
-- [ ] **Phase 16: SDK Specification** — Shared spec document defining header names, env vars, error codes, URL conventions, and API key convention across both SDKs
+- [x] **Phase 16: SDK Specification** — Shared spec document defining header names, env vars, error codes, URL conventions, and API key convention across both SDKs
 - [ ] **Phase 17: Python SDK** — `govynai` package on PyPI — GovynOpenAI, GovynAsyncOpenAI, GovynAnthropic, GovynAsyncAnthropic, typed errors, check_proxy(), env vars, py.typed
 - [ ] **Phase 18: Node.js SDK** — `govyn` npm package — GovynOpenAI, GovynAnthropic, typed errors, checkProxy(), TypeScript declarations, dual CJS+ESM build
 - [ ] **Phase 19: Integration Tests** — Live proxy end-to-end test suite verifying routing correctness, agent header forwarding, and streaming SSE passthrough for both SDKs
@@ -78,7 +78,7 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 **Plans**: 1 plan
 
 Plans:
-- [ ] 16-01: Write sdk-spec.md — constants, URL construction, headers, API key convention, error codes, health check, and behavioral rules
+- [x] 16-01: Write sdk-spec.md — constants, URL construction, headers, API key convention, error codes, health check, and behavioral rules
 
 ### Phase 17: Python SDK
 
@@ -168,7 +168,7 @@ Plans:
 | 13. Policy Management UI | v1.2 | 2/2 | Complete | 2026-02-28 |
 | 14. Approval Queue UI | v1.2 | 2/2 | Complete | 2026-02-28 |
 | 15. Alert Configuration & Delivery | v1.2 | 2/2 | Complete | 2026-02-28 |
-| 16. SDK Specification | v1.3 | 0/1 | Planned | - |
+| 16. SDK Specification | v1.3 | 1/1 | Complete | 2026-03-01 |
 | 17. Python SDK | v1.3 | 0/4 | Not started | - |
 | 18. Node.js SDK | v1.3 | 0/2 | Not started | - |
 | 19. Integration Tests | v1.3 | 0/1 | Not started | - |

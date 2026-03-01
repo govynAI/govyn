@@ -9,8 +9,8 @@ Requirements for v1.3 Framework SDKs. Each maps to roadmap phases.
 
 ### Specification
 
-- [ ] **SPEC-01**: Shared SDK spec defines header names (`X-Govyn-Agent`), env vars (`GOVYN_PROXY_URL`, `GOVYN_AGENT_ID`), error codes, and URL conventions across both SDKs
-- [ ] **SPEC-02**: Spec defines API key convention (placeholder `"govyn-passthrough"` vs scoped `gvn_*` keys)
+- [x] **SPEC-01**: Shared SDK spec defines header names (`X-Govyn-Agent`), env vars (`GOVYN_PROXY_URL`, `GOVYN_AGENT_ID`), error codes, and URL conventions across both SDKs
+- [x] **SPEC-02**: Spec defines API key convention (placeholder `"govyn-passthrough"` vs scoped `gvn_*` keys)
 
 ### Python SDK
 
@@ -89,8 +89,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SPEC-01 | Phase 16 | Pending |
-| SPEC-02 | Phase 16 | Pending |
+| SPEC-01 | Phase 16 | Complete |
+| SPEC-02 | Phase 16 | Complete |
 | PSDK-01 | Phase 17 | Pending |
 | PSDK-02 | Phase 17 | Pending |
 | PSDK-03 | Phase 17 | Pending |

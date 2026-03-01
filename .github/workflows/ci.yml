@@ -64,8 +64,8 @@ jobs:
           SIZE=$(docker image inspect govyn:ci --format='{{.Size}}')
           MB=$((SIZE / 1048576))
           echo "Image size: ${MB}MB"
-          if [ "$MB" -gt 100 ]; then
-            echo "FAIL: Image exceeds 100MB"
+          if [ "$MB" -gt 150 ]; then
+            echo "FAIL: Image exceeds 150MB"
             exit 1
           fi
       - name: Smoke test

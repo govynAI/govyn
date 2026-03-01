@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Framework SDKs
 status: in_progress
-last_updated: "2026-03-01T03:14:00Z"
+last_updated: "2026-03-01T03:12:30Z"
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 9
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -23,23 +23,24 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 17 of 20 (Python SDK)
-Plan: 02
-Status: Plan 17-01 complete (package scaffold), ready for Plan 17-02
-Last activity: 2026-03-01 — Plan 17-01 complete (package scaffold with errors and constants)
+Plan: 04
+Status: Plan 17-03 complete (Anthropic wrappers + health check), ready for Plan 17-04
+Last activity: 2026-03-01 — Plan 17-03 complete (GovynAnthropic, check_proxy)
 
-Progress: [██████░░░░░░░░░░░░░░░░░░░░░░░░] 22%
+Progress: [██████████░░░░░░░░░░░░░░░░░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 39
+- Total plans completed: 40
 - Average duration: 5 min
-- Total execution time: 3.1 hours
+- Total execution time: 3.2 hours
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 16    | 01   | 2 min    | 2     | 1     |
 | 17    | 01   | 8 min    | 2     | 7     |
+| 17    | 03   | 6 min    | 1     | 5     |
 
 ## Accumulated Context
 
@@ -55,6 +56,8 @@ Progress: [██████░░░░░░░░░░░░░░░░░
 - [Phase 16]: Future error codes (HTTP 403 policy violation, budget warning header) documented but deferred to post-v1.3
 - [Phase 17-01]: Removed async_check_proxy from __all__ -- sdk-spec.md only specifies check_proxy as public API
 - [Phase 17-01]: httpx added as core dependency for check_proxy health endpoint support
+- [Phase 17-03]: Inlined _resolve_params in _anthropic.py to avoid cross-module coupling with _openai.py
+- [Phase 17-03]: async_check_proxy uses httpx.AsyncClient context manager for proper resource cleanup
 
 ### Pending Todos
 
@@ -68,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Completed 17-01-PLAN.md (package scaffold with errors and constants)
+Stopped at: Completed 17-03-PLAN.md (GovynAnthropic, GovynAsyncAnthropic, check_proxy)
 Resume file: None

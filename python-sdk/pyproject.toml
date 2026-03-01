@@ -5,10 +5,9 @@ build-backend = "hatchling.build"
 [project]
 name = "govynai"
 version = "0.1.0"
-description = "Python SDK for the Govyn AI agent governance proxy"
-license = "MIT"
-readme = "README.md"
+description = "Python SDK for the Govyn AI governance proxy"
 requires-python = ">=3.10"
+license = "MIT"
 dependencies = ["httpx>=0.27"]
 
 [project.optional-dependencies]

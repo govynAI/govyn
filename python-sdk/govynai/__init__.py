@@ -13,7 +13,6 @@ __all__ = [
     "GovynBudgetExceededError",
     "GovynLoopDetectedError",
     "check_proxy",
-    "async_check_proxy",
 ]
 
 # Eager imports -- always available
@@ -42,11 +41,5 @@ def __getattr__(name: str):
 
         globals()["check_proxy"] = check_proxy
         return check_proxy
-
-    if name == "async_check_proxy":
-        from ._health import async_check_proxy
-
-        globals()["async_check_proxy"] = async_check_proxy
-        return async_check_proxy
 
     raise AttributeError(f"module 'govynai' has no attribute {name!r}")

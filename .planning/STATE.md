@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Framework SDKs
 status: in_progress
-last_updated: "2026-03-01T03:12:30Z"
+last_updated: "2026-03-01T03:27:33Z"
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 9
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 17 of 20 (Python SDK)
-Plan: 04
-Status: Plan 17-03 complete (Anthropic wrappers + health check), ready for Plan 17-04
-Last activity: 2026-03-01 — Plan 17-03 complete (GovynAnthropic, check_proxy)
+Plan: Complete (all 4 plans done)
+Status: Phase 17 complete; PyPI publish deferred to manual action
+Last activity: 2026-03-01 — Plan 17-04 complete (integration wiring, 81 tests passing, wheel built)
 
-Progress: [██████████░░░░░░░░░░░░░░░░░░░░] 33%
+Progress: [█████████████░░░░░░░░░░░░░░░░░] 44%
 
 ## Performance Metrics
 
@@ -42,6 +42,7 @@ Progress: [██████████░░░░░░░░░░░░░
 | 17    | 01   | 8 min    | 2     | 7     |
 | 17    | 02   | 15 min   | 1     | 3     |
 | 17    | 03   | 6 min    | 1     | 5     |
+| 17    | 04   | 21 min   | 1     | 2     |
 
 ## Accumulated Context
 
@@ -61,6 +62,9 @@ Progress: [██████████░░░░░░░░░░░░░
 - [Phase 17-02]: Lazy class construction via _get_classes() with _cached_classes caching preserves class identity for isinstance checks
 - [Phase 17-03]: Inlined _resolve_params in _anthropic.py to avoid cross-module coupling with _openai.py
 - [Phase 17-03]: async_check_proxy uses httpx.AsyncClient context manager for proper resource cleanup
+- [Phase 17-04]: Added async_check_proxy to __all__ for async user ergonomics (9 public symbols)
+- [Phase 17-04]: Used subprocess isolation for lazy import tests to avoid in-process module cache contamination
+- [Phase 17-04]: Used python -m build instead of hatch build for wheel generation on Windows
 
 ### Pending Todos
 
@@ -74,5 +78,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Completed 17-02-PLAN.md (GovynOpenAI, GovynAsyncOpenAI wrappers)
+Stopped at: Completed 17-04-PLAN.md (integration wiring, all tests pass, wheel built)
 Resume file: None

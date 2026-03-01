@@ -2,26 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Framework SDKs
-status: unknown
-last_updated: "2026-03-01T01:25:39.902Z"
-progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
----
-
----
-gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Framework SDKs
 status: in_progress
-last_updated: "2026-03-01T01:20:53Z"
+last_updated: "2026-03-01T03:14:00Z"
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 9
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -36,22 +23,23 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 17 of 20 (Python SDK)
-Plan: —
-Status: Phase 16 complete, ready to plan Phase 17
-Last activity: 2026-03-01 — Phase 16 complete (sdk-spec.md written)
+Plan: 02
+Status: Plan 17-01 complete (package scaffold), ready for Plan 17-02
+Last activity: 2026-03-01 — Plan 17-01 complete (package scaffold with errors and constants)
 
-Progress: [███░░░░░░░░░░░░░░░░░░░░░░░░░░░] 11%
+Progress: [██████░░░░░░░░░░░░░░░░░░░░░░░░] 22%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 38
+- Total plans completed: 39
 - Average duration: 5 min
-- Total execution time: 2.97 hours
+- Total execution time: 3.1 hours
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 16    | 01   | 2 min    | 2     | 1     |
+| 17    | 01   | 8 min    | 2     | 7     |
 
 ## Accumulated Context
 
@@ -65,6 +53,8 @@ Progress: [███░░░░░░░░░░░░░░░░░░░░
 - [Phase 16]: Passthrough API key mode (`govyn-passthrough`) as recommended default over scoped `gvn_*` keys
 - [Phase 16]: `base_url` derived from `proxy_url` + route prefix, not user-configurable
 - [Phase 16]: Future error codes (HTTP 403 policy violation, budget warning header) documented but deferred to post-v1.3
+- [Phase 17-01]: Removed async_check_proxy from __all__ -- sdk-spec.md only specifies check_proxy as public API
+- [Phase 17-01]: httpx added as core dependency for check_proxy health endpoint support
 
 ### Pending Todos
 
@@ -78,5 +68,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Completed 16-01-PLAN.md (SDK Specification)
+Stopped at: Completed 17-01-PLAN.md (package scaffold with errors and constants)
 Resume file: None

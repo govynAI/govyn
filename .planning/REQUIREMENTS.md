@@ -19,11 +19,11 @@ Requirements for v1.3 Framework SDKs. Each maps to roadmap phases.
 - [ ] **PSDK-03**: User can replace `anthropic.Anthropic()` with `GovynAnthropic(agent_id=...)` and all existing code works unchanged
 - [ ] **PSDK-04**: User can replace `anthropic.AsyncAnthropic()` with `GovynAsyncAnthropic(agent_id=...)` for async usage
 - [ ] **PSDK-05**: User can configure proxy URL and agent ID via environment variables instead of constructor args
-- [ ] **PSDK-06**: User receives `GovynBudgetExceededError` with clear message when budget limit is hit
-- [ ] **PSDK-07**: User receives `GovynLoopDetectedError` with clear message when loop detection triggers
+- [x] **PSDK-06**: User receives `GovynBudgetExceededError` with clear message when budget limit is hit
+- [x] **PSDK-07**: User receives `GovynLoopDetectedError` with clear message when loop detection triggers
 - [ ] **PSDK-08**: User can call `check_proxy()` to verify proxy reachability before making API calls
-- [ ] **PSDK-09**: Package includes `py.typed` marker for type checker support
-- [ ] **PSDK-10**: User can `pip install govynai` to get the SDK from PyPI
+- [x] **PSDK-09**: Package includes `py.typed` marker for type checker support
+- [x] **PSDK-10**: User can `pip install govynai` to get the SDK from PyPI
 
 ### Node.js SDK
 
@@ -96,11 +96,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PSDK-03 | Phase 17 | Pending |
 | PSDK-04 | Phase 17 | Pending |
 | PSDK-05 | Phase 17 | Pending |
-| PSDK-06 | Phase 17 | Pending |
-| PSDK-07 | Phase 17 | Pending |
+| PSDK-06 | Phase 17 | Complete |
+| PSDK-07 | Phase 17 | Complete |
 | PSDK-08 | Phase 17 | Pending |
-| PSDK-09 | Phase 17 | Pending |
-| PSDK-10 | Phase 17 | Pending |
+| PSDK-09 | Phase 17 | Complete |
+| PSDK-10 | Phase 17 | Complete |
 | NSDK-01 | Phase 18 | Pending |
 | NSDK-02 | Phase 18 | Pending |
 | NSDK-03 | Phase 18 | Pending |

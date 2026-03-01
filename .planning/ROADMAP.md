@@ -95,7 +95,7 @@ Plans:
 
 Plans:
 - [x] 17-01: Create `python-sdk/` package structure with `hatchling` build config, `pyproject.toml`, `govynai/__init__.py`, and `py.typed` marker
-- [ ] 17-02: Implement `GovynOpenAI` and `GovynAsyncOpenAI` classes with base URL construction, header injection, max_retries override, and env var resolution
+- [x] 17-02: Implement `GovynOpenAI` and `GovynAsyncOpenAI` classes with base URL construction, header injection, max_retries override, and env var resolution
 - [x] 17-03: Implement `GovynAnthropic` and `GovynAsyncAnthropic` classes, `GovynBudgetExceededError`, `GovynLoopDetectedError`, and `check_proxy()` utility
 - [ ] 17-04: Write pytest + pytest-asyncio + respx test suite; publish to PyPI
 
@@ -169,7 +169,7 @@ Plans:
 | 14. Approval Queue UI | v1.2 | 2/2 | Complete | 2026-02-28 |
 | 15. Alert Configuration & Delivery | v1.2 | 2/2 | Complete | 2026-02-28 |
 | 16. SDK Specification | v1.3 | Complete    | 2026-03-01 | 2026-03-01 |
-| 17. Python SDK | v1.3 | 2/4 | In progress | - |
+| 17. Python SDK | v1.3 | 3/4 | In progress | - |
 | 18. Node.js SDK | v1.3 | 0/2 | Not started | - |
 | 19. Integration Tests | v1.3 | 0/1 | Not started | - |
 | 20. Documentation & Framework Integration | v1.3 | 0/1 | Not started | - |

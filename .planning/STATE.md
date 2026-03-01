@@ -40,6 +40,7 @@ Progress: [██████████░░░░░░░░░░░░░
 |-------|------|----------|-------|-------|
 | 16    | 01   | 2 min    | 2     | 1     |
 | 17    | 01   | 8 min    | 2     | 7     |
+| 17    | 02   | 15 min   | 1     | 3     |
 | 17    | 03   | 6 min    | 1     | 5     |
 
 ## Accumulated Context
@@ -56,6 +57,8 @@ Progress: [██████████░░░░░░░░░░░░░
 - [Phase 16]: Future error codes (HTTP 403 policy violation, budget warning header) documented but deferred to post-v1.3
 - [Phase 17-01]: Removed async_check_proxy from __all__ -- sdk-spec.md only specifies check_proxy as public API
 - [Phase 17-01]: httpx added as core dependency for check_proxy health endpoint support
+- [Phase 17-02]: Used _make_status_error override instead of catch-and-re-raise -- prevents constructing an exception only to discard it
+- [Phase 17-02]: Lazy class construction via _get_classes() with _cached_classes caching preserves class identity for isinstance checks
 - [Phase 17-03]: Inlined _resolve_params in _anthropic.py to avoid cross-module coupling with _openai.py
 - [Phase 17-03]: async_check_proxy uses httpx.AsyncClient context manager for proper resource cleanup
 
@@ -71,5 +74,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Completed 17-03-PLAN.md (GovynAnthropic, GovynAsyncAnthropic, check_proxy)
+Stopped at: Completed 17-02-PLAN.md (GovynOpenAI, GovynAsyncOpenAI wrappers)
 Resume file: None

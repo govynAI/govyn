@@ -1,0 +1,10 @@
+"""Canonical constants from sdk-spec.md section 1."""
+
+HEADER_AGENT = "X-Govyn-Agent"
+ENV_PROXY_URL = "GOVYN_PROXY_URL"
+ENV_AGENT_ID = "GOVYN_AGENT_ID"
+DEFAULT_PROXY_URL = "http://localhost:4000"
+ROUTE_OPENAI = "/v1/openai"
+ROUTE_ANTHROPIC = "/v1/anthropic"
+DEFAULT_API_KEY = "govyn-passthrough"
+HEALTH_ENDPOINT = "/health"

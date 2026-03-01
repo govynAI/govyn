@@ -89,42 +89,42 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SPEC-01 | — | Pending |
-| SPEC-02 | — | Pending |
-| PSDK-01 | — | Pending |
-| PSDK-02 | — | Pending |
-| PSDK-03 | — | Pending |
-| PSDK-04 | — | Pending |
-| PSDK-05 | — | Pending |
-| PSDK-06 | — | Pending |
-| PSDK-07 | — | Pending |
-| PSDK-08 | — | Pending |
-| PSDK-09 | — | Pending |
-| PSDK-10 | — | Pending |
-| NSDK-01 | — | Pending |
-| NSDK-02 | — | Pending |
-| NSDK-03 | — | Pending |
-| NSDK-04 | — | Pending |
-| NSDK-05 | — | Pending |
-| NSDK-06 | — | Pending |
-| NSDK-07 | — | Pending |
-| NSDK-08 | — | Pending |
-| NSDK-09 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
-| TEST-04 | — | Pending |
-| DOCS-01 | — | Pending |
-| DOCS-02 | — | Pending |
-| DOCS-03 | — | Pending |
-| FWRK-01 | — | Pending |
-| FWRK-02 | — | Pending |
+| SPEC-01 | Phase 16 | Pending |
+| SPEC-02 | Phase 16 | Pending |
+| PSDK-01 | Phase 17 | Pending |
+| PSDK-02 | Phase 17 | Pending |
+| PSDK-03 | Phase 17 | Pending |
+| PSDK-04 | Phase 17 | Pending |
+| PSDK-05 | Phase 17 | Pending |
+| PSDK-06 | Phase 17 | Pending |
+| PSDK-07 | Phase 17 | Pending |
+| PSDK-08 | Phase 17 | Pending |
+| PSDK-09 | Phase 17 | Pending |
+| PSDK-10 | Phase 17 | Pending |
+| NSDK-01 | Phase 18 | Pending |
+| NSDK-02 | Phase 18 | Pending |
+| NSDK-03 | Phase 18 | Pending |
+| NSDK-04 | Phase 18 | Pending |
+| NSDK-05 | Phase 18 | Pending |
+| NSDK-06 | Phase 18 | Pending |
+| NSDK-07 | Phase 18 | Pending |
+| NSDK-08 | Phase 18 | Pending |
+| NSDK-09 | Phase 18 | Pending |
+| TEST-01 | Phase 19 | Pending |
+| TEST-02 | Phase 19 | Pending |
+| TEST-03 | Phase 19 | Pending |
+| TEST-04 | Phase 19 | Pending |
+| DOCS-01 | Phase 20 | Pending |
+| DOCS-02 | Phase 20 | Pending |
+| DOCS-03 | Phase 20 | Pending |
+| FWRK-01 | Phase 20 | Pending |
+| FWRK-02 | Phase 20 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 30 total
-- Mapped to phases: 0
-- Unmapped: 30 ⚠️
+- Mapped to phases: 30
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-02-28 after initial definition*
+*Last updated: 2026-02-28 after v1.3 roadmap creation (all 30 requirements mapped)*

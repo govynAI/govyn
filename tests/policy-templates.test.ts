@@ -8,7 +8,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { parsePoliciesFromFile } from '../src/policy-parser.js';
 import { PolicyEngine } from '../src/policy-engine.js';
 import { CostAggregator } from '../src/cost-aggregator.js';

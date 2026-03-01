@@ -8,7 +8,7 @@
  * flow without requiring a real PostgreSQL instance.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as http from 'node:http';
 import * as crypto from 'node:crypto';
 import { startServer } from '../../src/server.js';
@@ -181,7 +181,7 @@ class MockApprovalManager {
     };
   }
 
-  async approveRequest(id: string, decidedBy: string, notes?: string): Promise<boolean> {
+  async approveRequest(id: string, _decidedBy: string, _notes?: string): Promise<boolean> {
     const record = this.records.get(id);
     if (!record || record.status !== 'pending') return false;
     const token = crypto.randomUUID();
@@ -192,7 +192,7 @@ class MockApprovalManager {
     return true;
   }
 
-  async denyRequest(id: string, decidedBy: string, notes?: string): Promise<boolean> {
+  async denyRequest(id: string, _decidedBy: string, _notes?: string): Promise<boolean> {
     const record = this.records.get(id);
     if (!record || record.status !== 'pending') return false;
     record.status = 'denied';

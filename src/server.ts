@@ -545,7 +545,7 @@ export function startServer(
         }
 
         // Evaluate policies (between route matching and forwarding)
-        let requestedModel = extractModelFromBody(bodyString);
+        const requestedModel = extractModelFromBody(bodyString);
         let actualModel = requestedModel;
         let finalBodyBuffer = bodyBuffer;
         let policyResult: PolicyEvaluationResult | undefined;

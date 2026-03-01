@@ -14,7 +14,7 @@
  * - policy_result field present in action log for denied requests
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as http from 'node:http';
 import { startServer } from '../src/server.js';
 import { CostAggregator } from '../src/cost-aggregator.js';
@@ -1148,7 +1148,7 @@ describe('model_route integration', () => {
       await new Promise((r) => setTimeout(r, 50));
 
       // Check that the cost aggregator has a record with requestedModel
-      const summaries = ts.aggregator.getSummary({ agentId: 'cost-agent' });
+      const _summaries = ts.aggregator.getSummary({ agentId: 'cost-agent' });
       // The upstream returns usage data so cost recording should have fired
       // Check raw records are accessible (aggregator stores them)
       // We verify at the action log level which is more accessible

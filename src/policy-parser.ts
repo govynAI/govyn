@@ -60,7 +60,7 @@ function getNodeLine(source: string, node: Node | Pair | null | undefined): numb
 /**
  * Get the column number for a YAML node from its range property.
  */
-function getNodeColumn(source: string, node: Node | Pair | null | undefined): number | undefined {
+function _getNodeColumn(source: string, node: Node | Pair | null | undefined): number | undefined {
   if (!node) return undefined;
   const range = (node as { range?: [number, number, number] }).range;
   if (range && range[0] !== undefined) {
@@ -494,7 +494,7 @@ export function parsePolicies(yamlString: string): PolicyParseResult {
         const routing_opt_out_agents = getMapValue(policyMap, 'routing_opt_out_agents') as string[] | undefined;
 
         // Parse rules array with proper typing
-        let rules: Array<{ when?: Record<string, unknown>; route_to: string; default?: 'passthrough' }> = [];
+        const rules: Array<{ when?: Record<string, unknown>; route_to: string; default?: 'passthrough' }> = [];
         if (Array.isArray(rawRules)) {
           for (const rawRule of rawRules) {
             if (rawRule && typeof rawRule === 'object') {

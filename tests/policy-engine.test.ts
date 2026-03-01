@@ -17,10 +17,8 @@ import type {
   ContentFilterPolicy,
   TimeWindowPolicy,
   ModelRoutePolicy,
-  ModelRoutingRule,
   ModelRouteResult,
   PolicyRequestContext,
-  PolicyEvaluationResult,
 } from '../src/policy-types.js';
 
 /** Helper: build a minimal request context */

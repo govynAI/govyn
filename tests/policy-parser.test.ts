@@ -7,7 +7,6 @@
 
 import { describe, it, expect } from 'vitest';
 import { parsePolicies, parsePoliciesFromFile } from '../src/policy-parser.js';
-import type { PolicyParseResult } from '../src/policy-types.js';
 
 describe('parsePolicies', () => {
 

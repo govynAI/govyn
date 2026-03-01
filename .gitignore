@@ -1,7 +1,53 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
-*.egg-info/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+*.egg
+python-sdk/dist/
+python-sdk/.pytest_cache/
+
+# Environment
 .env
 .env.*
+
+# Logs
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# GSD planning directory
+.planning/
+
+# GSD tooling
+.claude/
+
+# Internal strategy docs
+docs/ARCHITECTURE_DECISIONS.md
+docs/BUILD_ROADMAP.md
+docs/MARKET_RESEARCH.md
+docs/POSITIONING.md
+docs/PRODUCT_SPEC.md
+ARCHITECTURE_DECISIONS.md
+BUILD_ROADMAP.md
+MARKET_RESEARCH.md
+POSITIONING.md
+PRODUCT_SPEC.md
+GSD_PROJECT_BRIEF.md
+
+# Internal specs
+sdk-spec.md

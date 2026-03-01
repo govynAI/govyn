@@ -4,9 +4,11 @@ node_modules
 .claude
 .agents
 tests
-src
 docs
 *.md
+!README.md
 .gitignore
 .npmignore
 dist
+python-sdk
+dashboard

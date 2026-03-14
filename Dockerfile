@@ -24,9 +24,6 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy compiled output from build stage
 COPY --from=build /app/dist/ dist/
 
-# Copy default config
-COPY govyn.config.yaml ./
-
 # Copy example configs
 COPY configs/ configs/
 

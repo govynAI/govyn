@@ -91,7 +91,7 @@ def test_import_govynai_does_not_import_providers():
 def test_govynai_version():
     import govynai
 
-    assert govynai.__version__ == "0.2.0"
+    assert govynai.__version__ == "0.2.1"
 
 
 def test_govynai_all_exports():

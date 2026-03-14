@@ -32,6 +32,7 @@ jobs:
       - run: npm run build
       - run: npm --prefix dashboard run build
       - run: npm run package:check
+      - run: mkdir -p release-artifacts
       - run: npm pack --pack-destination release-artifacts
 
       - run: python -m pip install --upgrade pip build twine

@@ -9,6 +9,7 @@ RUN npm ci --production=false
 
 # Copy source and compile TypeScript
 COPY src/ src/
+COPY scripts/ scripts/
 COPY tsconfig.json ./
 RUN npm run build
 

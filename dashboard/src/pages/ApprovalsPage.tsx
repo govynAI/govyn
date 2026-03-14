@@ -107,6 +107,25 @@ export default function ApprovalsPage() {
     );
   }
 
+  const approvalsAvailable = pendingQuery.available && historyQuery.available;
+  const approvalsUnavailableReason =
+    pendingQuery.unavailableReason ??
+    historyQuery.unavailableReason ??
+    "Approvals are unavailable on this proxy.";
+
+  if (!approvalsAvailable) {
+    return (
+      <>
+        <PageHeader title="Approvals" />
+        <EmptyState
+          icon={CheckCircle}
+          title="Approvals unavailable"
+          description={approvalsUnavailableReason}
+        />
+      </>
+    );
+  }
+
   return (
     <>
       <PageHeader title="Approvals" />

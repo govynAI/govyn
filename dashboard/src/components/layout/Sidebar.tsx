@@ -5,6 +5,7 @@ import {
   Shield,
   CheckCircle,
   Bell,
+  BookOpen,
   Settings,
   ChevronLeft,
 } from "lucide-react";
@@ -15,6 +16,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { prefetchDashboardPath } from "@/lib/dashboard-imports";
+import BrandLogo from "@/components/branding/BrandLogo";
 import UserMenu from "./UserMenu";
 import ConnectionPopover from "./ConnectionPopover";
 
@@ -24,6 +27,7 @@ const navItems = [
   { path: "/policies", label: "Policies", icon: Shield },
   { path: "/approvals", label: "Approvals", icon: CheckCircle },
   { path: "/alerts", label: "Alerts", icon: Bell },
+  { path: "/guide", label: "Guide", icon: BookOpen },
   { path: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -50,6 +54,9 @@ function NavItem({
   const link = (
     <NavLink
       to={path}
+      onMouseEnter={() => prefetchDashboardPath(path)}
+      onFocus={() => prefetchDashboardPath(path)}
+      onTouchStart={() => prefetchDashboardPath(path)}
       className={cn(
         "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
         isActive
@@ -94,20 +101,19 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Header */}
       <div
         className={cn(
-          "flex h-14 items-center border-b border-[var(--sidebar-border)]",
+          "relative flex h-14 items-center border-b border-[var(--sidebar-border)]",
           collapsed ? "justify-center px-2" : "justify-between px-4"
         )}
       >
-        {!collapsed && (
-          <span className="text-lg font-semibold tracking-tight text-[var(--sidebar-foreground)]">
-            Govyn
-          </span>
-        )}
+        <BrandLogo compact={collapsed} className={collapsed ? "h-8" : "h-7"} />
         <Button
           variant="ghost"
           size="icon-xs"
           onClick={onToggle}
-          className="text-[var(--sidebar-foreground)]/50 hover:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)]"
+          className={cn(
+            "text-[var(--sidebar-foreground)]/50 hover:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)]",
+            collapsed && "absolute right-2 top-1/2 -translate-y-1/2",
+          )}
         >
           <ChevronLeft
             className={cn(

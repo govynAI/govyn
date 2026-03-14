@@ -327,8 +327,8 @@ providers:
     expect(openai!.apiKeyEnv).toBe('MY_CUSTOM_ENV_VAR');
   });
 
-  // Test 14: Host defaults to 0.0.0.0 when not specified
-  it('host defaults to 0.0.0.0 when not specified', () => {
+  // Test 14: Host defaults to 127.0.0.1 when not specified
+  it('host defaults to 127.0.0.1 when not specified', () => {
     const yaml = `
 version: 1
 proxy:
@@ -336,7 +336,20 @@ proxy:
 `;
     const filePath = writeConfig('no-host.yaml', yaml);
     const config = loadConfig(filePath);
-    expect(config.host).toBe('0.0.0.0');
+    expect(config.host).toBe('127.0.0.1');
+    expect(config.security!.requireAgentApiKey).toBe(false);
+  });
+
+  it('enables agent API key enforcement by default for non-loopback hosts', () => {
+    const yaml = `
+version: 1
+proxy:
+  port: 8080
+  host: "0.0.0.0"
+`;
+    const filePath = writeConfig('public-host.yaml', yaml);
+    const config = loadConfig(filePath);
+    expect(config.security!.requireAgentApiKey).toBe(true);
   });
 
   // Test 15: Agent with loop_detection config

@@ -57,6 +57,20 @@ export interface CostsApiResponse {
   };
 }
 
+export interface CostTimeSeriesPoint {
+  timestamp: string;
+  label: string;
+  total: number;
+  agents: Record<string, number>;
+}
+
+export interface CostTimeSeriesApiResponse {
+  period: string;
+  bucket: "hour" | "day" | "month";
+  generated_at: string;
+  points: CostTimeSeriesPoint[];
+}
+
 /** Budget status for a single period (daily or monthly) */
 export interface BudgetPeriodStatus {
   limit: number | null;
@@ -141,6 +155,8 @@ export interface ApprovalsApiResponse {
   total: number;
   limit: number;
   offset: number;
+  available?: boolean;
+  reason?: string;
 }
 
 /** Alert rule type */
@@ -200,6 +216,8 @@ export interface AlertHistoryEntry {
 /** Response shape of GET /api/alerts/rules */
 export interface AlertRulesApiResponse {
   rules: AlertRule[];
+  available?: boolean;
+  reason?: string;
 }
 
 /** Response shape of GET /api/alerts/history */
@@ -208,4 +226,6 @@ export interface AlertHistoryApiResponse {
   total: number;
   limit: number;
   offset: number;
+  available?: boolean;
+  reason?: string;
 }

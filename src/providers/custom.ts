@@ -35,8 +35,21 @@ export function mapCustomHeaders(
 ): Record<string, string> {
   const headers: Record<string, string> = {};
 
-  // Forward all headers except host
-  const skipHeaders = new Set(['host', 'connection', 'transfer-encoding']);
+  // Never forward hop-by-hop or Govyn-internal auth headers to upstreams.
+  const skipHeaders = new Set([
+    'authorization',
+    'connection',
+    'host',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade',
+    'x-govyn-admin-key',
+    'x-govyn-approval',
+  ]);
 
   for (const [key, value] of Object.entries(incomingHeaders)) {
     if (skipHeaders.has(key.toLowerCase())) continue;

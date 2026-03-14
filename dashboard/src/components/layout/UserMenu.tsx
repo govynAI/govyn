@@ -1,8 +1,8 @@
-import { useUser, useClerk } from "@clerk/clerk-react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, Settings, Moon, Sun } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,12 +22,11 @@ interface UserMenuProps {
 }
 
 export default function UserMenu({ collapsed }: UserMenuProps) {
-  const { user } = useUser();
-  const { signOut } = useClerk();
+  const { username, logout } = useAuth();
   const navigate = useNavigate();
   const { isDark, toggleTheme } = useTheme();
 
-  const displayName = user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? "User";
+  const displayName = username ?? "Admin";
   const initials = displayName
     .split(" ")
     .map((n) => n[0])
@@ -45,7 +44,6 @@ export default function UserMenu({ collapsed }: UserMenuProps) {
         )}
       >
         <Avatar size="sm">
-          <AvatarImage src={user?.imageUrl} alt={displayName} />
           <AvatarFallback>{initials}</AvatarFallback>
         </Avatar>
         {!collapsed && (
@@ -84,7 +82,7 @@ export default function UserMenu({ collapsed }: UserMenuProps) {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
-          onClick={() => signOut()}
+          onClick={() => void logout()}
         >
           <LogOut className="size-4" />
           Sign out

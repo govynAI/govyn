@@ -93,7 +93,7 @@ describe('resolveAgentId', () => {
     expect(result.source).toBe('default');
   });
 
-  it('prefers header over API key when both are present', () => {
+  it('prefers API key over header when both are present', () => {
     const req = makeRequest({
       'x-govyn-agent': 'header-agent',
       authorization: 'Bearer gvn_ra_xxxx',
@@ -104,8 +104,8 @@ describe('resolveAgentId', () => {
 
     const result = resolveAgentId(req, agents);
 
-    expect(result.agentId).toBe('header-agent');
-    expect(result.source).toBe('header');
+    expect(result.agentId).toBe('research-agent');
+    expect(result.source).toBe('api-key');
   });
 
   it('resolves header-based agent even with empty agents map', () => {

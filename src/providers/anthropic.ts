@@ -49,7 +49,6 @@ export function mapAnthropicHeaders(
   const anthropicHeaders = [
     'anthropic-version',
     'anthropic-beta',
-    'anthropic-dangerous-direct-browser-access',
   ];
   for (const key of anthropicHeaders) {
     const value = incomingHeaders[key];

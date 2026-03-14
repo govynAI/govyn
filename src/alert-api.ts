@@ -11,8 +11,8 @@
  */
 
 import type http from 'node:http';
-import type postgres from 'postgres';
 import type { AlertManager } from './alert-manager.js';
+import { deliverWebhookJson, resolveWebhookTarget } from './security.js';
 
 const VALID_RULE_TYPES = new Set(['budget_threshold', 'policy_trigger']);
 const DEFAULT_LIMIT = 50;
@@ -21,7 +21,6 @@ const MAX_LIMIT = 200;
 export function handleAlertApi(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  sql: postgres.Sql,
   alertManager: AlertManager,
 ): void {
   const url = req.url ?? '';
@@ -33,29 +32,29 @@ export function handleAlertApi(
 
   // Route dispatch
   if (method === 'GET' && pathname === '/api/alerts/rules') {
-    handleListRules(res, sql);
+    handleListRules(res, alertManager);
     return;
   }
 
   if (method === 'POST' && pathname === '/api/alerts/rules') {
-    readBody(req, (body) => handleCreateRule(res, sql, alertManager, body));
+    readBody(req, (body) => handleCreateRule(res, alertManager, body));
     return;
   }
 
   if (method === 'PUT' && pathname.startsWith('/api/alerts/rules/')) {
     const id = pathname.replace('/api/alerts/rules/', '');
-    readBody(req, (body) => handleUpdateRule(res, sql, alertManager, id, body));
+    readBody(req, (body) => handleUpdateRule(res, alertManager, id, body));
     return;
   }
 
   if (method === 'DELETE' && pathname.startsWith('/api/alerts/rules/')) {
     const id = pathname.replace('/api/alerts/rules/', '');
-    handleDeleteRule(req, res, sql, alertManager, id);
+    handleDeleteRule(req, res, alertManager, id);
     return;
   }
 
   if (method === 'GET' && pathname === '/api/alerts/history') {
-    handleListHistory(res, sql, parsed.searchParams);
+    handleListHistory(res, alertManager, parsed.searchParams);
     return;
   }
 
@@ -71,12 +70,11 @@ export function handleAlertApi(
 
 function handleListRules(
   res: http.ServerResponse,
-  sql: postgres.Sql,
+  alertManager: AlertManager,
 ): void {
   (async () => {
     try {
-      const rows = await sql`SELECT * FROM alert_rules ORDER BY created_at DESC`;
-      const rules = rows.map(mapRuleRow);
+      const rules = (await alertManager.listRules()).map(mapRule);
       sendJson(res, 200, { rules });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -88,7 +86,6 @@ function handleListRules(
 
 function handleCreateRule(
   res: http.ServerResponse,
-  sql: postgres.Sql,
   alertManager: AlertManager,
   body: string,
 ): void {
@@ -113,9 +110,14 @@ function handleCreateRule(
         return;
       }
 
-      if (!webhook_url || typeof webhook_url !== 'string' ||
-          (!webhook_url.startsWith('http://') && !webhook_url.startsWith('https://'))) {
-        sendError(res, 400, 'Missing or invalid webhook_url: must start with http:// or https://');
+      if (!webhook_url || typeof webhook_url !== 'string') {
+        sendError(res, 400, 'Missing or invalid webhook_url');
+        return;
+      }
+
+      const webhookTarget = await resolveWebhookTarget(webhook_url);
+      if (!webhookTarget.ok) {
+        sendError(res, 400, webhookTarget.error);
         return;
       }
 
@@ -134,15 +136,16 @@ function handleCreateRule(
       const cooldown = typeof cooldown_minutes === 'number' ? cooldown_minutes : 60;
       const isEnabled = typeof enabled === 'boolean' ? enabled : true;
 
-      const rows = await sql`
-        INSERT INTO alert_rules (name, type, enabled, config, webhook_url, cooldown_minutes)
-        VALUES (${name.trim()}, ${type}, ${isEnabled}, ${JSON.stringify(config)}, ${webhook_url}, ${cooldown})
-        RETURNING *
-      `;
+      const rule = await alertManager.createRule({
+        name: name.trim(),
+        type,
+        enabled: isEnabled,
+        config,
+        webhookUrl: webhookTarget.target.normalizedUrl,
+        cooldownMinutes: cooldown,
+      });
 
-      await alertManager.reloadRules();
-
-      sendJson(res, 201, { rule: mapRuleRow(rows[0]) });
+      sendJson(res, 201, { rule: mapRule(rule) });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[alert-api] Create rule error:', msg);
@@ -153,7 +156,6 @@ function handleCreateRule(
 
 function handleUpdateRule(
   res: http.ServerResponse,
-  sql: postgres.Sql,
   alertManager: AlertManager,
   id: string,
   body: string,
@@ -166,51 +168,71 @@ function handleUpdateRule(
         return;
       }
 
-      // Build dynamic SET clause
-      const setClauses: string[] = [];
-      const values: unknown[] = [];
-      let paramIndex = 1;
+      let normalizedWebhookUrl: string | undefined;
 
       if (parsed.name !== undefined) {
-        setClauses.push(`name = $${paramIndex++}`);
-        values.push(parsed.name);
+        if (typeof parsed.name !== 'string' || parsed.name.trim().length === 0) {
+          sendError(res, 400, 'Missing or invalid name');
+          return;
+        }
       }
       if (parsed.enabled !== undefined) {
-        setClauses.push(`enabled = $${paramIndex++}`);
-        values.push(parsed.enabled);
+        if (typeof parsed.enabled !== 'boolean') {
+          sendError(res, 400, 'enabled must be a boolean');
+          return;
+        }
       }
       if (parsed.config !== undefined) {
-        setClauses.push(`config = $${paramIndex++}`);
-        values.push(JSON.stringify(parsed.config));
+        if (!parsed.config || typeof parsed.config !== 'object') {
+          sendError(res, 400, 'Missing or invalid config');
+          return;
+        }
       }
       if (parsed.webhook_url !== undefined) {
-        setClauses.push(`webhook_url = $${paramIndex++}`);
-        values.push(parsed.webhook_url);
+        if (typeof parsed.webhook_url !== 'string') {
+          sendError(res, 400, 'Missing or invalid webhook_url');
+          return;
+        }
+        const webhookTarget = await resolveWebhookTarget(parsed.webhook_url);
+        if (!webhookTarget.ok) {
+          sendError(res, 400, webhookTarget.error);
+          return;
+        }
+        normalizedWebhookUrl = webhookTarget.target.normalizedUrl;
       }
       if (parsed.cooldown_minutes !== undefined) {
-        setClauses.push(`cooldown_minutes = $${paramIndex++}`);
-        values.push(parsed.cooldown_minutes);
+        if (!Number.isInteger(parsed.cooldown_minutes) || parsed.cooldown_minutes < 0) {
+          sendError(res, 400, 'cooldown_minutes must be a non-negative integer');
+          return;
+        }
       }
 
-      if (setClauses.length === 0) {
+      if (
+        parsed.name === undefined
+        && parsed.enabled === undefined
+        && parsed.config === undefined
+        && parsed.webhook_url === undefined
+        && parsed.cooldown_minutes === undefined
+      ) {
         sendError(res, 400, 'No fields to update');
         return;
       }
 
-      setClauses.push(`updated_at = NOW()`);
-      values.push(id); // for WHERE clause
+      const updatedRule = await alertManager.updateRule({
+        id,
+        name: parsed.name?.trim(),
+        enabled: parsed.enabled,
+        config: parsed.config,
+        webhookUrl: normalizedWebhookUrl,
+        cooldownMinutes: parsed.cooldown_minutes,
+      });
 
-      const query = `UPDATE alert_rules SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-      const rows = await sql.unsafe(query, values as (string | number | boolean)[]);
-
-      if (rows.length === 0) {
+      if (!updatedRule) {
         sendError(res, 404, 'Alert rule not found');
         return;
       }
 
-      await alertManager.reloadRules();
-
-      sendJson(res, 200, { rule: mapRuleRow(rows[0]) });
+      sendJson(res, 200, { rule: mapRule(updatedRule) });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[alert-api] Update rule error:', msg);
@@ -222,20 +244,16 @@ function handleUpdateRule(
 function handleDeleteRule(
   _req: http.IncomingMessage,
   res: http.ServerResponse,
-  sql: postgres.Sql,
   alertManager: AlertManager,
   id: string,
 ): void {
   (async () => {
     try {
-      const rows = await sql`DELETE FROM alert_rules WHERE id = ${id} RETURNING id`;
-
-      if (rows.length === 0) {
+      const deleted = await alertManager.deleteRule(id);
+      if (!deleted) {
         sendError(res, 404, 'Alert rule not found');
         return;
       }
-
-      await alertManager.reloadRules();
 
       sendJson(res, 200, { success: true });
     } catch (err) {
@@ -248,7 +266,7 @@ function handleDeleteRule(
 
 function handleListHistory(
   res: http.ServerResponse,
-  sql: postgres.Sql,
+  alertManager: AlertManager,
   params: URLSearchParams,
 ): void {
   (async () => {
@@ -274,51 +292,9 @@ function handleListHistory(
         }
       }
 
-      // Optional rule_id filter
       const ruleId = params.get('rule_id');
-
-      // Build dynamic WHERE
-      const conditions: string[] = [];
-      const values: (string | number)[] = [];
-      let paramIndex = 1;
-
-      if (ruleId) {
-        conditions.push(`rule_id = $${paramIndex}`);
-        values.push(ruleId);
-        paramIndex += 1;
-      }
-
-      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-      // Count total
-      const countQuery = `SELECT COUNT(*)::int AS total FROM alert_history ${whereClause}`;
-      const countResult = await sql.unsafe(countQuery, values);
-      const total: number = countResult[0]?.total ?? 0;
-
-      // Fetch paginated results
-      const dataQuery = `
-        SELECT * FROM alert_history
-        ${whereClause}
-        ORDER BY fired_at DESC
-        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-      `;
-      const dataValues = [...values, limit, offset];
-      const rows = await sql.unsafe(dataQuery, dataValues);
-
-      const alerts = rows.map((row: Record<string, unknown>) => ({
-        id: row.id,
-        rule_id: row.rule_id,
-        rule_name: row.rule_name,
-        rule_type: row.rule_type,
-        event_type: row.event_type,
-        event_payload: row.event_payload,
-        webhook_url: row.webhook_url,
-        webhook_status: row.webhook_status ?? null,
-        webhook_error: row.webhook_error ?? null,
-        fired_at: row.fired_at instanceof Date ? row.fired_at.toISOString() : row.fired_at,
-      }));
-
-      sendJson(res, 200, { alerts, total, limit, offset });
+      const result = await alertManager.listHistory(limit, offset, ruleId);
+      sendJson(res, 200, result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('[alert-api] History error:', msg);
@@ -334,8 +310,14 @@ function handleTestWebhook(
   (async () => {
     try {
       const parsed = parseJsonBody(body);
-      if (!parsed || !parsed.webhook_url) {
+      if (!parsed || typeof parsed.webhook_url !== 'string') {
         sendError(res, 400, 'Missing webhook_url');
+        return;
+      }
+
+      const webhookTarget = await resolveWebhookTarget(parsed.webhook_url);
+      if (!webhookTarget.ok) {
+        sendError(res, 400, webhookTarget.error);
         return;
       }
 
@@ -347,24 +329,12 @@ function handleTestWebhook(
       };
 
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-
-        const response = await fetch(parsed.webhook_url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Govyn-Alerts/1.0',
-          },
-          body: JSON.stringify(testPayload),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeout);
+        const response = await deliverWebhookJson(webhookTarget.target, testPayload);
         sendJson(res, 200, { success: true, status: response.status });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        sendJson(res, 200, { success: false, error: msg });
+        console.error('[alert-api] Test webhook delivery failed:', msg);
+        sendJson(res, 200, { success: false, error: 'Webhook delivery failed' });
       }
     } catch {
       sendError(res, 400, 'Invalid JSON body');
@@ -414,24 +384,29 @@ function validateConfig(type: string, config: Record<string, unknown>): string |
   return null;
 }
 
-function mapRuleRow(row: Record<string, unknown>): Record<string, unknown> {
+function mapRule(row: {
+  id: string;
+  name: string;
+  type: string;
+  enabled: boolean;
+  config: unknown;
+  webhookUrl: string;
+  cooldownMinutes: number;
+  lastFiredAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): Record<string, unknown> {
   return {
     id: row.id,
     name: row.name,
     type: row.type,
     enabled: row.enabled,
     config: row.config,
-    webhook_url: row.webhook_url,
-    cooldown_minutes: row.cooldown_minutes,
-    last_fired_at: row.last_fired_at instanceof Date
-      ? row.last_fired_at.toISOString()
-      : row.last_fired_at ?? null,
-    created_at: row.created_at instanceof Date
-      ? row.created_at.toISOString()
-      : row.created_at,
-    updated_at: row.updated_at instanceof Date
-      ? row.updated_at.toISOString()
-      : row.updated_at,
+    webhook_url: row.webhookUrl,
+    cooldown_minutes: row.cooldownMinutes,
+    last_fired_at: row.lastFiredAt?.toISOString() ?? null,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
   };
 }
 

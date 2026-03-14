@@ -5,10 +5,12 @@ import PageHeader from "@/components/layout/PageHeader";
 import { PeriodSwitcher } from "@/components/costs/PeriodSwitcher";
 import { BudgetProgressBar } from "@/components/costs/BudgetProgressBar";
 import { BudgetBadge } from "@/components/costs/BudgetBadge";
-import { CostAreaChart, type CostChartDataPoint } from "@/components/costs/CostAreaChart";
+import LazyCostAreaChart from "@/components/costs/LazyCostAreaChart";
 import { AgentModelTable } from "@/components/costs/AgentModelTable";
 import { useCosts } from "@/hooks/useCosts";
+import { useCostTimeseries } from "@/hooks/useCostTimeseries";
 import { apiFetch } from "@/lib/api-client";
+import { toCostChartData } from "@/lib/cost-chart";
 import { useProxyConnection } from "@/hooks/useProxyConnection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +31,7 @@ export default function AgentCostDetailPage() {
   const { isConnected } = useProxyConnection();
   const [period, setPeriod] = useState<DashboardPeriod>("today");
   const { data, loading, error, refetch } = useCosts(period, agentId);
+  const { data: timeseriesData } = useCostTimeseries(period, agentId);
 
   // Budget state — fetched separately from /api/budgets/:agentId
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
@@ -58,27 +61,10 @@ export default function AgentCostDetailPage() {
   }, [fetchBudget]);
 
   const agent = data?.agents[0] ?? null;
-
-  // Build chart data from the API response
-  // The API returns aggregated totals, not time-series. We create a snapshot
-  // at the current generated_at timestamp showing the agent's total cost.
-  const chartData: CostChartDataPoint[] = useMemo(() => {
-    if (!agent) return [];
-
-    const timestamp = data?.generated_at
-      ? new Date(data.generated_at).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        })
-      : "Current";
-
-    return [
-      {
-        label: timestamp,
-        total: agent.totalCost,
-      },
-    ];
-  }, [agent, data?.generated_at]);
+  const { chartData } = useMemo(
+    () => toCostChartData(timeseriesData?.points ?? []),
+    [timeseriesData?.points],
+  );
 
   // Loading skeleton
   if (loading && !data) {
@@ -288,7 +274,7 @@ export default function AgentCostDetailPage() {
             <CardTitle>Spending Over Time</CardTitle>
           </CardHeader>
           <CardContent>
-            <CostAreaChart data={chartData} stacked={false} />
+            <LazyCostAreaChart data={chartData} stacked={false} />
           </CardContent>
         </Card>
 

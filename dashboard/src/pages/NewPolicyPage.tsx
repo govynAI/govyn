@@ -5,15 +5,15 @@ import { toast } from "sonner";
 import { parseDocument } from "yaml";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import PolicyEditor, {
-  type PolicyEditorHandle,
-} from "@/components/policies/PolicyEditor";
+import LazyPolicyEditor from "@/components/policies/LazyPolicyEditor";
+import type { PolicyEditorHandle } from "@/components/policies/PolicyEditor";
 import { PolicyErrorPanel } from "@/components/policies/PolicyErrorPanel";
 import {
   POLICY_TEMPLATES,
   POLICY_TYPE_DESCRIPTIONS,
 } from "@/components/policies/PolicyTemplates";
 import { apiFetch } from "@/lib/api-client";
+import { loadPolicyEditorModule } from "@/lib/dashboard-imports";
 import type { PolicyType, PolicyValidationError } from "@/types/api";
 import type { LucideIcon } from "lucide-react";
 
@@ -91,6 +91,7 @@ export default function NewPolicyPage() {
   const [saving, setSaving] = useState(false);
 
   const handleTypeSelect = useCallback((type: PolicyType) => {
+    void loadPolicyEditorModule();
     setSelectedType(type);
     setCurrentYaml(POLICY_TEMPLATES[type]);
     setValidationErrors([]);
@@ -244,7 +245,7 @@ export default function NewPolicyPage() {
       </header>
 
       <div className="flex-1 overflow-auto p-6 space-y-4">
-        <PolicyEditor
+        <LazyPolicyEditor
           ref={editorRef}
           value={currentYaml}
           onChange={handleChange}

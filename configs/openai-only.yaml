@@ -5,7 +5,7 @@ version: 1
 
 proxy:
   port: 4000
-  host: 0.0.0.0
+  host: 127.0.0.1                       # Local-only default. For remote exposure, change this to 0.0.0.0 and add your own agent API key.
 
 providers:
   openai:
@@ -14,7 +14,15 @@ providers:
 
 agents:
   my-agent:
-    api_keys: []                         # Optional: restrict to specific API keys
+    # Local-only example. If you expose the proxy on a non-loopback host,
+    # uncomment the lines below and generate your own long random secret.
+    # api_keys:
+    #   - gvn_generate_your_own_long_random_secret_here
+
+database:
+  url: sqlite:./govyn.db                # Default OSS persistence. Govyn creates this local SQLite file automatically.
+  # For a shared or managed database later, switch to PostgreSQL:
+  # url: postgres://govyn:change-me@db.example.com:5432/govyn
 
 budgets:
   my-agent:
@@ -22,6 +30,12 @@ budgets:
     monthly_limit: 100.00                # Hard stop at $100/month
     limit_type: hard                     # hard = block requests, soft = warn only
     soft_warning_percent: 80             # Emit warning header at 80% usage
+
+security:
+  # Only needed for remote dashboard or admin API access.
+  # admin_api_key_env: GOVYN_ADMIN_API_KEY
+  # trusted_origins:
+  #   - https://dashboard.example.com
 
 logging:
   enabled: true

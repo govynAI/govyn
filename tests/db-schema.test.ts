@@ -9,6 +9,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { MIGRATIONS } from '../src/db-schema.js';
 import { loadConfig } from '../src/config.js';
+import { DEFAULT_SQLITE_DATABASE_FILE } from '../src/database-url.js';
 
 /** Write a temp YAML file and return its absolute path. */
 function writeTempConfig(content: string): string {
@@ -157,7 +158,7 @@ proxy:
     expect(config.database!.retentionDays).toBe(90);
   });
 
-  it('missing database config results in undefined (no crash)', () => {
+  it('missing database config defaults to a local sqlite database', () => {
     const filePath = writeTempConfig(`
 version: 1
 proxy:
@@ -167,10 +168,14 @@ proxy:
 
     const config = loadConfig(filePath);
 
-    expect(config.database).toBeUndefined();
+    expect(config.database).toBeDefined();
+    expect(config.database!.url).toBe(`sqlite:${path.resolve(path.dirname(filePath), DEFAULT_SQLITE_DATABASE_FILE)}`);
+    expect(config.database!.failOpen).toBe(true);
+    expect(config.database!.retentionDays).toBe(90);
+    expect(config.database!.approvalRetentionDays).toBe(365);
   });
 
-  it('empty database url results in undefined config', () => {
+  it('empty database url falls back to the default sqlite database', () => {
     const filePath = writeTempConfig(`
 version: 1
 proxy:
@@ -182,6 +187,10 @@ database:
 
     const config = loadConfig(filePath);
 
-    expect(config.database).toBeUndefined();
+    expect(config.database).toBeDefined();
+    expect(config.database!.url).toBe(`sqlite:${path.resolve(path.dirname(filePath), DEFAULT_SQLITE_DATABASE_FILE)}`);
+    expect(config.database!.failOpen).toBe(true);
+    expect(config.database!.retentionDays).toBe(90);
+    expect(config.database!.approvalRetentionDays).toBe(365);
   });
 });

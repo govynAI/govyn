@@ -176,7 +176,7 @@ proxy:
 `);
     const config = loadConfig(configPath);
     expect(config.port).toBe(3000);
-    expect(config.host).toBe('0.0.0.0');
+    expect(config.host).toBe('127.0.0.1');
     expect(config.providers.size).toBe(0);
     expect(config.agents.size).toBe(0);
     expect(config.budgets.size).toBe(0);

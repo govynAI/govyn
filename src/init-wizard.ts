@@ -6,33 +6,11 @@
  * budget limits, and agent naming. Outputs a govyn.config.yaml file.
  */
 
-import * as readline from 'node:readline';
 import * as fs from 'node:fs';
 import { stringify as yamlStringify } from 'yaml';
-
-/**
- * Create a readline interface and a helper to ask questions.
- */
-function createPrompt(): { ask: (question: string) => Promise<string>; close: () => void } {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  function ask(question: string): Promise<string> {
-    return new Promise((resolve) => {
-      rl.question(question, (answer: string) => {
-        resolve(answer.trim());
-      });
-    });
-  }
-
-  function close(): void {
-    rl.close();
-  }
-
-  return { ask, close };
-}
+import { LocalAuthManager, DEFAULT_AUTH_FILE } from './auth.js';
+import { DEFAULT_POLICIES_FILE, ensurePolicyFile } from './policy-file.js';
+import { createPrompt } from './prompt.js';
 
 interface ProviderEntry {
   name: string;
@@ -45,7 +23,7 @@ interface ProviderEntry {
  * Produces a govyn.config.yaml in the current working directory.
  */
 export async function runInitWizard(): Promise<void> {
-  const { ask, close } = createPrompt();
+  const { ask, askHidden, close } = createPrompt();
 
   console.log('\nGovyn Setup Wizard');
   console.log('==================\n');
@@ -114,6 +92,32 @@ export async function runInitWizard(): Promise<void> {
   // 4. Agent name
   const agentName = (await ask("Enter a name for your first agent (default: 'default-agent'): ")) || 'default-agent';
 
+  // 5. Persistence backend
+  const storageInput = (await ask('Persistence backend? (SQLite/postgres, default: SQLite): ')).trim().toLowerCase();
+  let databaseUrl = 'sqlite:./govyn.db';
+  if (storageInput === 'postgres' || storageInput === 'postgresql') {
+    const postgresUrl = (await ask('Enter the PostgreSQL URL (postgres://...): ')).trim();
+    if (!postgresUrl.startsWith('postgres://') && !postgresUrl.startsWith('postgresql://')) {
+      close();
+      throw new Error('PostgreSQL URLs must start with postgres:// or postgresql://');
+    }
+    databaseUrl = postgresUrl;
+  }
+
+  // 6. Local dashboard admin account
+  const createAdminInput = (await ask('Create a local dashboard admin account now? (Y/n): ')).toLowerCase();
+  let adminUsername: string | null = null;
+  let adminPassword: string | null = null;
+  if (createAdminInput === '' || createAdminInput === 'y' || createAdminInput === 'yes') {
+    adminUsername = (await ask("Admin username (default: 'admin'): ")) || 'admin';
+    adminPassword = await askHidden('Admin password: ');
+    const confirmation = await askHidden('Confirm admin password: ');
+    if (adminPassword !== confirmation) {
+      close();
+      throw new Error('Admin passwords did not match');
+    }
+  }
+
   close();
 
   // Build the config object
@@ -121,7 +125,7 @@ export async function runInitWizard(): Promise<void> {
     version: 1,
     proxy: {
       port: 4000,
-      host: '0.0.0.0',
+      host: '127.0.0.1',
     },
     providers: {} as Record<string, unknown>,
   };
@@ -152,10 +156,12 @@ export async function runInitWizard(): Promise<void> {
 
   // Populate agents
   configObj['agents'] = {
-    [agentName]: {
-      api_keys: [],
-    },
+    [agentName]: {},
   };
+  configObj['database'] = {
+    url: databaseUrl,
+  };
+  configObj['policies_file'] = DEFAULT_POLICIES_FILE;
 
   // Populate budgets if set
   if (dailyBudget !== null && !isNaN(dailyBudget) && dailyBudget > 0) {
@@ -183,8 +189,27 @@ export async function runInitWizard(): Promise<void> {
   // Write the config file
   const outputPath = './govyn.config.yaml';
   fs.writeFileSync(outputPath, yamlContent, 'utf8');
+  const policyFile = ensurePolicyFile(DEFAULT_POLICIES_FILE);
 
   console.log(`\nConfig written to ${outputPath}`);
+  console.log(
+    policyFile.created
+      ? `Local policy file created at ${policyFile.path}`
+      : `Local policy file ready at ${policyFile.path}`,
+  );
+  if (databaseUrl.startsWith('sqlite:')) {
+    console.log('Local SQLite persistence configured at ./govyn.db');
+  } else {
+    console.log(`PostgreSQL persistence configured: ${databaseUrl}`);
+  }
+
+  if (adminUsername && adminPassword) {
+    const authManager = new LocalAuthManager(DEFAULT_AUTH_FILE);
+    const normalizedUsername = authManager.setupAdmin(adminUsername, adminPassword);
+    console.log(`Local dashboard admin "${normalizedUsername}" written to ${authManager.authFile}`);
+  } else {
+    console.log('Local dashboard auth not created during init. Run `npx govyn admin setup` later if you want browser login.');
+  }
 
   // Print environment variable reminders
   if (envReminders.length > 0) {
@@ -196,4 +221,12 @@ export async function runInitWizard(): Promise<void> {
 
   console.log('\nStart the proxy with: npx govyn');
   console.log('Verify it works:      curl http://localhost:4000/health');
+  console.log('The generated govyn.config.yaml is your local deployment file. Keep it out of git and do not treat it as a shared example.');
+  console.log('SQLite is the default OSS backend and powers approvals, alerts, and history out of the box. Switch database.url to PostgreSQL later if you need a shared or multi-instance deployment.');
+  console.log('The local dashboard auth store lives in ./govyn.auth.json by default. Keep it local and out of git.');
+  console.log('The default SQLite database lives in ./govyn.db and should stay local too.');
+  console.log('Govyn never ships real admin or agent API keys; generate and set your own secrets when you need remote access.');
+  console.log('Remote dashboard access: create the local admin account on the host and add your dashboard origin under security.trusted_origins.');
+  console.log('Remote automation or break-glass API access: set GOVYN_ADMIN_API_KEY (or your chosen security.admin_api_key_env value).');
+  console.log('Remote agent access: set proxy.host to 0.0.0.0 (or another non-loopback bind) and configure at least one agents.<name>.api_keys value.');
 }

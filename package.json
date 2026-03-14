@@ -1,37 +1,65 @@
 {
   "name": "govyn",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "description": "AI agent governance proxy",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "homepage": "https://github.com/govynAI/govyn",
+  "bugs": {
+    "url": "https://github.com/govynAI/govyn/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/govynAI/govyn.git"
+  },
+  "keywords": [
+    "ai",
+    "governance",
+    "proxy",
+    "security",
+    "self-hosted"
+  ],
   "bin": {
     "govyn": "dist/cli.js"
   },
   "files": [
-    "dist",
-    "govyn.config.yaml",
-    "configs"
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.js.map",
+    "configs/*.yaml"
   ],
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node ./scripts/clean-dist.mjs && tsc",
+    "build:python": "node ./scripts/clean-python-build.mjs && python -m build python-sdk --outdir python-sdk/dist",
+    "clean:dist": "node ./scripts/clean-dist.mjs",
+    "clean:python-build": "node ./scripts/clean-python-build.mjs",
     "dev": "tsx watch src/index.ts",
     "lint": "eslint src/ tests/",
+    "package:check": "node ./scripts/check-package-surface.mjs",
+    "release:check": "npm test && npm run lint && npm run typecheck && npm run build && npm --prefix dashboard run build && python -m pytest python-sdk/tests -q && npm run security:scan && npm run build:python",
+    "security:scan": "npm audit && npm --prefix dashboard audit && python -m pip_audit python-sdk && python -m bandit -r python-sdk/govynai && npm run package:check",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node dist/cli.js"
   },
+  "overrides": {
+    "flatted": "^3.4.0",
+    "minimatch": "^3.1.4"
+  },
   "dependencies": {
+    "better-sqlite3": "^12.8.0",
     "postgres": "^3.4.8",
     "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.0",
     "eslint": "^9.18.0",
     "tsx": "^4.19.2",

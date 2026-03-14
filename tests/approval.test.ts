@@ -51,6 +51,7 @@ describe('ApprovalManager', () => {
         targetPath: '/v1/chat/completions',
         policyName: 'sensitive-ops',
         requestSummary: 'Test request summary',
+        requestHash: 'hash-1',
         timeoutSeconds: 1800,
       });
 
@@ -74,6 +75,7 @@ describe('ApprovalManager', () => {
         targetPath: '/v1/messages',
         policyName: 'review-all',
         requestSummary: 'Summary',
+        requestHash: 'hash-2',
         timeoutSeconds: 600,
       });
 
@@ -174,23 +176,23 @@ describe('ApprovalManager', () => {
   });
 
   describe('validateAndConsumeToken', () => {
-    it('atomically marks token as used and returns request context', async () => {
+    it('atomically marks token as used when the request context matches', async () => {
       const mockSql = createMockSql({
         updateResult: [{
           count: 1,
-          agent_id: 'test-agent',
           policy_name: 'sensitive-ops',
-          target_path: '/v1/chat/completions',
         }],
       });
       const manager = new ApprovalManager(mockSql);
 
-      const result = await manager.validateAndConsumeToken('valid-token');
+      const result = await manager.validateAndConsumeToken('valid-token', {
+        agentId: 'test-agent',
+        targetPath: '/v1/chat/completions',
+        requestHash: 'request-hash',
+      });
 
       expect(result).not.toBeNull();
-      expect(result!.agentId).toBe('test-agent');
       expect(result!.policyName).toBe('sensitive-ops');
-      expect(result!.targetPath).toBe('/v1/chat/completions');
     });
 
     it('returns null for already-used token (single-use guarantee)', async () => {
@@ -203,7 +205,11 @@ describe('ApprovalManager', () => {
       });
       const manager = new ApprovalManager(mockSql);
 
-      const result = await manager.validateAndConsumeToken('used-token');
+      const result = await manager.validateAndConsumeToken('used-token', {
+        agentId: 'test-agent',
+        targetPath: '/v1/chat/completions',
+        requestHash: 'request-hash',
+      });
 
       expect(result).toBeNull();
     });
@@ -217,7 +223,11 @@ describe('ApprovalManager', () => {
       });
       const manager = new ApprovalManager(mockSql);
 
-      const result = await manager.validateAndConsumeToken('fake-token');
+      const result = await manager.validateAndConsumeToken('fake-token', {
+        agentId: 'test-agent',
+        targetPath: '/v1/chat/completions',
+        requestHash: 'request-hash',
+      });
 
       expect(result).toBeNull();
     });

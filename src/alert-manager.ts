@@ -12,52 +12,26 @@
 
 import type postgres from 'postgres';
 import { govynEvents, type GovynEvent } from './events.js';
+import { deliverWebhookJson, resolveWebhookTarget } from './security.js';
+import type {
+  AlertRuleRecord,
+  AlertStore,
+  BudgetThresholdConfig,
+  PolicyTriggerConfig,
+} from './persistence-types.js';
+import { adaptAlertStore } from './persistence.js';
 
-export interface AlertRule {
-  id: string;
-  name: string;
-  type: 'budget_threshold' | 'policy_trigger';
-  enabled: boolean;
-  config: BudgetThresholdConfig | PolicyTriggerConfig;
-  webhookUrl: string;
-  cooldownMinutes: number;
-  lastFiredAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface BudgetThresholdConfig {
-  agent_id: string;    // specific agent or '*' for all
-  metric: 'daily' | 'monthly';
-  threshold_percent: number;
-}
-
-export interface PolicyTriggerConfig {
-  policy_name: string; // specific policy name or '*' for any
-  agent_id: string;    // specific agent or '*' for all
-}
-
-export interface AlertHistoryEntry {
-  id: string;
-  ruleId: string;
-  ruleName: string;
-  ruleType: string;
-  eventType: string;
-  eventPayload: Record<string, unknown>;
-  webhookUrl: string;
-  webhookStatus: number | null;
-  webhookError: string | null;
-  firedAt: string;
-}
+export type AlertRule = AlertRuleRecord;
+export type { BudgetThresholdConfig, PolicyTriggerConfig };
 
 export class AlertManager {
-  private sql: postgres.Sql;
+  private readonly store: AlertStore;
   private rules: AlertRule[] = [];
   private cooldownCache: Map<string, Date> = new Map();
   private eventHandler: ((event: GovynEvent) => void) | null = null;
 
-  constructor(sql: postgres.Sql) {
-    this.sql = sql;
+  constructor(storeOrSql: AlertStore | postgres.Sql) {
+    this.store = adaptAlertStore(storeOrSql);
   }
 
   /**
@@ -90,20 +64,7 @@ export class AlertManager {
    * Reload all rules from the database.
    */
   async reloadRules(): Promise<void> {
-    const rows = await this.sql`SELECT * FROM alert_rules ORDER BY created_at DESC`;
-
-    this.rules = rows.map((row: Record<string, unknown>) => ({
-      id: row.id as string,
-      name: row.name as string,
-      type: row.type as 'budget_threshold' | 'policy_trigger',
-      enabled: row.enabled as boolean,
-      config: row.config as BudgetThresholdConfig | PolicyTriggerConfig,
-      webhookUrl: row.webhook_url as string,
-      cooldownMinutes: row.cooldown_minutes as number,
-      lastFiredAt: row.last_fired_at ? new Date(row.last_fired_at as string) : null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    }));
+    this.rules = await this.store.listRules();
 
     // Populate cooldown cache from loaded rules
     for (const rule of this.rules) {
@@ -172,32 +133,30 @@ export class AlertManager {
     };
 
     // Send webhook
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-
-      const response = await fetch(rule.webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Govyn-Alerts/1.0',
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
-      webhookStatus = response.status;
-    } catch (err) {
-      webhookError = err instanceof Error ? err.message : String(err);
+    const webhookTarget = await resolveWebhookTarget(rule.webhookUrl);
+    if (!webhookTarget.ok) {
+      webhookError = webhookTarget.error;
+    } else {
+      try {
+        const response = await deliverWebhookJson(webhookTarget.target, payload);
+        webhookStatus = response.status;
+      } catch (err) {
+        webhookError = err instanceof Error ? err.message : String(err);
+      }
     }
 
     // Record in alert_history (even on webhook failure)
     try {
-      await this.sql`
-        INSERT INTO alert_history (rule_id, rule_name, rule_type, event_type, event_payload, webhook_url, webhook_status, webhook_error)
-        VALUES (${rule.id}, ${rule.name}, ${rule.type}, ${event.type}, ${JSON.stringify(this.serializeEvent(event))}, ${rule.webhookUrl}, ${webhookStatus}, ${webhookError})
-      `;
+      await this.store.recordAlertHistory({
+        ruleId: rule.id,
+        ruleName: rule.name,
+        ruleType: rule.type,
+        eventType: event.type,
+        eventPayload: this.serializeEvent(event),
+        webhookUrl: rule.webhookUrl,
+        webhookStatus,
+        webhookError,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[alert-manager] Failed to record alert history:', msg);
@@ -205,9 +164,7 @@ export class AlertManager {
 
     // Update last_fired_at
     try {
-      await this.sql`
-        UPDATE alert_rules SET last_fired_at = NOW() WHERE id = ${rule.id}
-      `;
+      await this.store.touchRuleLastFired(rule.id, new Date(firedAt));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[alert-manager] Failed to update last_fired_at:', msg);
@@ -225,6 +182,50 @@ export class AlertManager {
       webhookUrl: rule.webhookUrl,
       webhookStatus,
     });
+  }
+
+  async listRules(): Promise<AlertRule[]> {
+    return this.store.listRules();
+  }
+
+  async createRule(input: {
+    name: string;
+    type: 'budget_threshold' | 'policy_trigger';
+    enabled: boolean;
+    config: BudgetThresholdConfig | PolicyTriggerConfig;
+    webhookUrl: string;
+    cooldownMinutes: number;
+  }): Promise<AlertRule> {
+    const rule = await this.store.createRule(input);
+    await this.reloadRules();
+    return rule;
+  }
+
+  async updateRule(input: {
+    id: string;
+    name?: string;
+    enabled?: boolean;
+    config?: BudgetThresholdConfig | PolicyTriggerConfig;
+    webhookUrl?: string;
+    cooldownMinutes?: number;
+  }): Promise<AlertRule | null> {
+    const rule = await this.store.updateRule(input);
+    if (rule) {
+      await this.reloadRules();
+    }
+    return rule;
+  }
+
+  async deleteRule(id: string): Promise<boolean> {
+    const deleted = await this.store.deleteRule(id);
+    if (deleted) {
+      await this.reloadRules();
+    }
+    return deleted;
+  }
+
+  async listHistory(limit: number, offset: number, ruleId?: string | null) {
+    return this.store.listHistory(limit, offset, ruleId);
   }
 
   // ---- Private helpers ----

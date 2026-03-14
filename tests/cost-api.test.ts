@@ -263,4 +263,41 @@ describe('handleCostApi', () => {
     expect(unpriced).toContain('unknown-model-xyz');
     expect(unpriced).not.toContain('gpt-4o');
   });
+
+  it('GET /api/costs/timeseries returns bucketed spend history with gap filling', async () => {
+    const now = Date.now();
+    aggregator.recordCost(makeRecord({
+      agentId: 'research-agent',
+      totalCost: 1.25,
+      timestamp: now - 2 * 60 * 60 * 1000,
+    }));
+    aggregator.recordCost(makeRecord({
+      agentId: 'sales-bot',
+      totalCost: 0.75,
+      timestamp: now - 60 * 60 * 1000,
+    }));
+
+    const res = await makeRequest(server, '/api/costs/timeseries?period=today');
+    expect(res.statusCode).toBe(200);
+
+    const data = res.json as Record<string, unknown>;
+    expect(data['bucket']).toBe('hour');
+    expect(Array.isArray(data['points'])).toBe(true);
+
+    const points = data['points'] as Array<{ total: number; agents: Record<string, number> }>;
+    expect(points.length).toBeGreaterThanOrEqual(3);
+    expect(points.some((point) => point.total === 0)).toBe(true);
+    expect(points.some((point) => point.agents['research-agent'] === 1.25)).toBe(true);
+    expect(points.some((point) => point.agents['sales-bot'] === 0.75)).toBe(true);
+  });
+
+  it('GET /api/costs/unknown returns 404', async () => {
+    const res = await makeRequest(server, '/api/costs/unknown');
+    expect(res.statusCode).toBe(404);
+    expect(res.json).toMatchObject({
+      error: {
+        code: 'not_found',
+      },
+    });
+  });
 });

@@ -26,16 +26,8 @@ export function resolveAgentId(
   req: IncomingMessage,
   agents: Map<string, AgentConfig>
 ): AgentIdentity {
-  // Priority 1: X-Govyn-Agent header (case-insensitive — Node.js lowercases all headers)
-  const agentHeader = req.headers['x-govyn-agent'];
-  if (agentHeader) {
-    const agentId = Array.isArray(agentHeader) ? agentHeader[0] : agentHeader;
-    if (agentId && agentId.trim().length > 0) {
-      return { agentId: agentId.trim(), source: 'header' };
-    }
-  }
-
-  // Priority 2: Authorization Bearer token matched against agent API keys
+  // Priority 1: Authorization Bearer token matched against agent API keys.
+  // Authenticated identity must win over self-declared headers to prevent impersonation.
   const authHeader = req.headers['authorization'];
   if (authHeader) {
     const token = extractBearerToken(authHeader);
@@ -45,6 +37,15 @@ export function resolveAgentId(
           return { agentId: agentName, source: 'api-key' };
         }
       }
+    }
+  }
+
+  // Priority 2: X-Govyn-Agent header (case-insensitive — Node.js lowercases all headers)
+  const agentHeader = req.headers['x-govyn-agent'];
+  if (agentHeader) {
+    const agentId = Array.isArray(agentHeader) ? agentHeader[0] : agentHeader;
+    if (agentId && agentId.trim().length > 0) {
+      return { agentId: agentId.trim(), source: 'header' };
     }
   }
 

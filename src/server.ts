@@ -13,6 +13,7 @@
 import * as http from 'node:http';
 import * as crypto from 'node:crypto';
 import type { ProxyConfig, LoggingMode, LogEntry } from './types.js';
+import { LocalAuthManager, LoginRateLimiter, SESSION_COOKIE_NAME } from './auth.js';
 import { matchRoute } from './router.js';
 import { forwardRequest } from './proxy.js';
 import { handleHealth } from './health.js';
@@ -33,8 +34,9 @@ import type { PolicyEngine } from './policy-engine.js';
 import type { PolicyRequestContext, PolicyEvaluationResult, ModelRouteResult, ApprovalPolicyResult } from './policy-types.js';
 import type { DbWriter } from './db-writer.js';
 import type { ApprovalManager } from './approval.js';
-import { generateRequestSummary } from './approval.js';
+import { generateRequestSummary, hashApprovalRequest } from './approval.js';
 import type { AlertManager } from './alert-manager.js';
+import { authenticateManagementRequest, isAllowedOrigin, validateSessionCsrf } from './security.js';
 
 /**
  * Send a JSON error response.
@@ -51,6 +53,291 @@ function sendJsonError(
     'content-length': Buffer.byteLength(body).toString(),
   });
   res.end(body);
+}
+
+function sendJson(
+  res: http.ServerResponse,
+  statusCode: number,
+  payload: unknown,
+  extraHeaders?: Record<string, string | string[]>,
+): void {
+  const body = JSON.stringify(payload);
+  res.writeHead(statusCode, {
+    'content-type': 'application/json',
+    'content-length': Buffer.byteLength(body).toString(),
+    ...(extraHeaders ?? {}),
+  });
+  res.end(body);
+}
+
+function appendVaryHeader(res: http.ServerResponse, value: string): void {
+  const existing = res.getHeader('Vary');
+  if (typeof existing === 'string' && existing.length > 0) {
+    const values = existing.split(',').map((part) => part.trim());
+    if (!values.includes(value)) {
+      res.setHeader('Vary', `${existing}, ${value}`);
+    }
+    return;
+  }
+
+  res.setHeader('Vary', value);
+}
+
+function setStandardApiHeaders(res: http.ServerResponse): void {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+}
+
+function isMutatingMethod(method: string): boolean {
+  return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+}
+
+function readRequestBody(req: http.IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+const ALERT_HISTORY_DEFAULT_LIMIT = 50;
+const ALERT_HISTORY_MAX_LIMIT = 200;
+const ALERTS_UNAVAILABLE_MESSAGE = 'Alerts are unavailable on this proxy';
+const ALERTS_UNAVAILABLE_REASON = 'Alerts require persistent alert storage and are disabled for this proxy.';
+const APPROVALS_DEFAULT_LIMIT = 50;
+const APPROVALS_MAX_LIMIT = 200;
+const APPROVALS_UNAVAILABLE_MESSAGE = 'Approvals are unavailable on this proxy';
+const APPROVALS_UNAVAILABLE_REASON = 'Approvals require database-backed approval storage and are disabled for this proxy.';
+
+function parseCookie(headerValue: string | string[] | undefined, name: string): string | null {
+  const cookieHeader = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  if (!cookieHeader) return null;
+
+  for (const part of cookieHeader.split(';')) {
+    const [rawName, ...rawValue] = part.trim().split('=');
+    if (!rawName || rawValue.length === 0) continue;
+    if (rawName.trim() !== name) continue;
+    return decodeURIComponent(rawValue.join('=').trim());
+  }
+
+  return null;
+}
+
+function isSecureRequest(req: http.IncomingMessage): boolean {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  if (typeof forwardedProto === 'string') {
+    return forwardedProto.split(',')[0]?.trim().toLowerCase() === 'https';
+  }
+
+  return Boolean((req.socket as { encrypted?: boolean }).encrypted);
+}
+
+function buildSessionCookie(sessionId: string, secure: boolean, maxAgeSeconds: number): string {
+  const sameSite = secure ? 'None' : 'Lax';
+  const attributes = [
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionId)}`,
+    'Path=/',
+    'HttpOnly',
+    `SameSite=${sameSite}`,
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+
+  if (secure) {
+    attributes.push('Secure');
+  }
+
+  return attributes.join('; ');
+}
+
+function buildClearedSessionCookie(secure: boolean): string {
+  const sameSite = secure ? 'None' : 'Lax';
+  const attributes = [
+    `${SESSION_COOKIE_NAME}=`,
+    'Path=/',
+    'HttpOnly',
+    `SameSite=${sameSite}`,
+    'Max-Age=0',
+  ];
+
+  if (secure) {
+    attributes.push('Secure');
+  }
+
+  return attributes.join('; ');
+}
+
+function getPathname(url: string): string {
+  try {
+    return new URL(url, 'http://localhost').pathname;
+  } catch {
+    return url;
+  }
+}
+
+function isApiOrHealthRequest(url: string): boolean {
+  return url === '/health' || url.startsWith('/api/');
+}
+
+function isApprovalPollingRequest(url: string, method: string): boolean {
+  if (method !== 'GET') return false;
+  const pathname = getPathname(url);
+  return /^\/api\/approvals\/[^/]+$/.test(pathname);
+}
+
+function sendAlertsUnavailable(
+  res: http.ServerResponse,
+  statusCode = 503,
+): void {
+  sendJson(res, statusCode, {
+    error: {
+      message: ALERTS_UNAVAILABLE_MESSAGE,
+      code: 'alerts_unavailable',
+    },
+    available: false,
+    reason: ALERTS_UNAVAILABLE_REASON,
+  });
+}
+
+function handleUnavailableAlerts(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): boolean {
+  const method = req.method ?? 'GET';
+  const parsed = new URL(req.url ?? '/api/alerts', 'http://localhost');
+  const pathname = parsed.pathname;
+
+  if (method === 'GET' && pathname === '/api/alerts/rules') {
+    sendJson(res, 200, {
+      rules: [],
+      available: false,
+      reason: ALERTS_UNAVAILABLE_REASON,
+    });
+    return true;
+  }
+
+  if (method === 'GET' && pathname === '/api/alerts/history') {
+    const limitParam = parsed.searchParams.get('limit');
+    let limit = ALERT_HISTORY_DEFAULT_LIMIT;
+    if (limitParam !== null) {
+      limit = Number.parseInt(limitParam, 10);
+      if (!Number.isInteger(limit) || limit < 1 || limit > ALERT_HISTORY_MAX_LIMIT) {
+        sendJsonError(
+          res,
+          400,
+          `Invalid limit: must be between 1 and ${ALERT_HISTORY_MAX_LIMIT}`,
+          'invalid_request',
+        );
+        return true;
+      }
+    }
+
+    const offsetParam = parsed.searchParams.get('offset');
+    let offset = 0;
+    if (offsetParam !== null) {
+      offset = Number.parseInt(offsetParam, 10);
+      if (!Number.isInteger(offset) || offset < 0) {
+        sendJsonError(res, 400, 'Invalid offset: must be >= 0', 'invalid_request');
+        return true;
+      }
+    }
+
+    sendJson(res, 200, {
+      alerts: [],
+      total: 0,
+      limit,
+      offset,
+      available: false,
+      reason: ALERTS_UNAVAILABLE_REASON,
+    });
+    return true;
+  }
+
+  if (
+    pathname === '/api/alerts/rules' ||
+    pathname.startsWith('/api/alerts/rules/') ||
+    pathname === '/api/alerts/test'
+  ) {
+    sendAlertsUnavailable(res);
+    return true;
+  }
+
+  return false;
+}
+
+function sendApprovalsUnavailable(
+  res: http.ServerResponse,
+  statusCode = 503,
+): void {
+  sendJson(res, statusCode, {
+    error: {
+      message: APPROVALS_UNAVAILABLE_MESSAGE,
+      code: 'approvals_unavailable',
+    },
+    available: false,
+    reason: APPROVALS_UNAVAILABLE_REASON,
+  });
+}
+
+function handleUnavailableApprovals(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): boolean {
+  const method = req.method ?? 'GET';
+  const parsed = new URL(req.url ?? '/api/approvals', 'http://localhost');
+  const pathname = parsed.pathname;
+
+  if (method === 'GET' && pathname === '/api/approvals') {
+    const limitParam = parsed.searchParams.get('limit');
+    let limit = APPROVALS_DEFAULT_LIMIT;
+    if (limitParam !== null) {
+      limit = Number.parseInt(limitParam, 10);
+      if (!Number.isInteger(limit) || limit < 1 || limit > APPROVALS_MAX_LIMIT) {
+        sendJsonError(
+          res,
+          400,
+          `Invalid limit: must be between 1 and ${APPROVALS_MAX_LIMIT}`,
+          'invalid_request',
+        );
+        return true;
+      }
+    }
+
+    const offsetParam = parsed.searchParams.get('offset');
+    let offset = 0;
+    if (offsetParam !== null) {
+      offset = Number.parseInt(offsetParam, 10);
+      if (!Number.isInteger(offset) || offset < 0) {
+        sendJsonError(res, 400, 'Invalid offset: must be >= 0', 'invalid_request');
+        return true;
+      }
+    }
+
+    sendJson(res, 200, {
+      approvals: [],
+      total: 0,
+      limit,
+      offset,
+      available: false,
+      reason: APPROVALS_UNAVAILABLE_REASON,
+    });
+    return true;
+  }
+
+  if (pathname.startsWith('/api/approvals/')) {
+    sendApprovalsUnavailable(res);
+    return true;
+  }
+
+  return false;
+}
+
+function requiresManagementAuth(url: string, method: string): boolean {
+  if (!url.startsWith('/api/')) return false;
+  if (url.startsWith('/api/auth/')) return false;
+  return !isApprovalPollingRequest(url, method);
 }
 
 /**
@@ -175,25 +462,264 @@ export function startServer(
 
   // Use provided enforcer or create a default (no limits) enforcer
   const enforcer = budgetEnforcer ?? new BudgetEnforcer(config.budgets, aggregator);
+  const authManager = config.security?.authFile
+    ? new LocalAuthManager(config.security.authFile, config.security.sessionTtlHours)
+    : undefined;
+  const loginRateLimiter = new LoginRateLimiter();
 
   const server = http.createServer(
     (req: http.IncomingMessage, res: http.ServerResponse) => {
       const url = req.url ?? '/';
       const method = req.method ?? 'GET';
+      const isApiRequest = isApiOrHealthRequest(url);
 
-      // CORS headers for dashboard (allow any origin for API/health endpoints)
+      if (isApiRequest) {
+        setStandardApiHeaders(res);
+      }
+
+      // CORS headers for dashboard/API consumers. Local origins are allowed by default;
+      // remote origins must be explicitly configured in security.trusted_origins.
       const origin = req.headers.origin;
-      if (origin && (url === '/health' || url.startsWith('/api/'))) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Govyn-Approval, X-Agent-Id');
-        res.setHeader('Access-Control-Max-Age', '86400');
+      if (origin && isApiRequest) {
+        appendVaryHeader(res, 'Origin');
+
+        if (isAllowedOrigin(origin, config.security)) {
+          res.setHeader('Access-Control-Allow-Origin', origin);
+          res.setHeader('Access-Control-Allow-Credentials', 'true');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Govyn-Approval, X-Agent-Id, X-Govyn-Admin-Key, X-Govyn-CSRF');
+          res.setHeader('Access-Control-Max-Age', '86400');
+        }
 
         if (method === 'OPTIONS') {
-          res.writeHead(204);
-          res.end();
+          if (isAllowedOrigin(origin, config.security)) {
+            res.writeHead(204);
+            res.end();
+          } else {
+            sendJsonError(res, 403, `Origin ${origin} is not allowed`, 'origin_not_allowed');
+          }
           return;
         }
+      }
+
+      if (requiresManagementAuth(url, method)) {
+        const authResult = authenticateManagementRequest(req, config.security, authManager);
+        if (!authResult.ok) {
+          sendJsonError(res, authResult.denial.statusCode, authResult.denial.message, authResult.denial.code);
+          return;
+        }
+
+        if (authResult.identity.type === 'session' && isMutatingMethod(method) && authManager) {
+          const csrfDenial = validateSessionCsrf(req, authManager);
+          if (csrfDenial) {
+            sendJsonError(res, csrfDenial.statusCode, csrfDenial.message, csrfDenial.code);
+            return;
+          }
+        }
+      }
+
+      if (url.startsWith('/api/auth/')) {
+        if (method === 'GET' && url === '/api/auth/session') {
+          try {
+            if (!authManager?.isConfigured()) {
+              sendJson(res, 200, {
+                authenticated: false,
+                auth_configured: false,
+                username: null,
+                csrf_token: null,
+              });
+              return;
+            }
+
+            const sessionId = parseCookie(req.headers.cookie, SESSION_COOKIE_NAME);
+            const session = sessionId ? authManager.getSession(sessionId) : null;
+            if (!session) {
+              sendJson(res, 200, {
+                authenticated: false,
+                auth_configured: true,
+                username: null,
+                csrf_token: null,
+              });
+              return;
+            }
+
+            sendJson(res, 200, {
+              authenticated: true,
+              auth_configured: true,
+              username: session.username,
+              csrf_token: session.csrfToken,
+              expires_at: session.expiresAt,
+            });
+          } catch {
+            sendJsonError(res, 500, 'Local auth is misconfigured', 'auth_config_error');
+          }
+          return;
+        }
+
+        if (method === 'POST' && url === '/api/auth/login') {
+          if (!authManager?.isConfigured()) {
+            sendJsonError(res, 409, 'Local dashboard auth is not configured. Run `govyn admin setup`.', 'auth_not_configured');
+            return;
+          }
+
+          readRequestBody(req).then((bodyBuffer) => {
+            let parsed: { username?: string; password?: string };
+            try {
+              parsed = JSON.parse(bodyBuffer.toString('utf8')) as { username?: string; password?: string };
+            } catch {
+              sendJsonError(res, 400, 'Invalid JSON body', 'invalid_request');
+              return;
+            }
+
+            if (!parsed.username || !parsed.password) {
+              sendJsonError(res, 400, 'Missing username or password', 'invalid_request');
+              return;
+            }
+
+            const remoteAddress = req.socket.remoteAddress ?? 'unknown';
+            const loginKey = `${remoteAddress}:${parsed.username.trim().toLowerCase()}`;
+            const retryAfter = loginRateLimiter.getRetryAfterSeconds(loginKey);
+            if (retryAfter) {
+              sendJson(res, 429, {
+                error: {
+                  message: 'Too many login attempts. Try again later.',
+                  code: 'login_rate_limited',
+                },
+              }, {
+                'retry-after': retryAfter.toString(),
+              });
+              return;
+            }
+
+            try {
+              const loginResult = authManager.login(parsed.username, parsed.password);
+              if (!loginResult) {
+                const blockedFor = loginRateLimiter.recordFailure(loginKey);
+                if (blockedFor) {
+                  sendJson(res, 429, {
+                    error: {
+                      message: 'Too many login attempts. Try again later.',
+                      code: 'login_rate_limited',
+                    },
+                  }, {
+                    'retry-after': blockedFor.toString(),
+                  });
+                  return;
+                }
+
+                sendJsonError(res, 401, 'Invalid username or password', 'invalid_credentials');
+                return;
+              }
+
+              loginRateLimiter.clear(loginKey);
+              const secure = isSecureRequest(req);
+              const expiresAtMs = Date.parse(loginResult.expiresAt);
+              const maxAgeSeconds = Math.max(
+                0,
+                Math.floor((expiresAtMs - Date.now()) / 1000),
+              );
+              sendJson(res, 200, {
+                authenticated: true,
+                auth_configured: true,
+                username: loginResult.username,
+                csrf_token: loginResult.csrfToken,
+                expires_at: loginResult.expiresAt,
+              }, {
+                'set-cookie': buildSessionCookie(loginResult.sessionId, secure, maxAgeSeconds),
+              });
+            } catch {
+              sendJsonError(res, 500, 'Local auth is misconfigured', 'auth_config_error');
+            }
+          }).catch(() => {
+            sendJsonError(res, 400, 'Invalid request body', 'invalid_request');
+          });
+          return;
+        }
+
+        if (method === 'POST' && url === '/api/auth/logout') {
+          const secure = isSecureRequest(req);
+          const sessionId = parseCookie(req.headers.cookie, SESSION_COOKIE_NAME);
+
+          if (sessionId && authManager?.isConfigured()) {
+            const origin = Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin;
+            if (origin && !isAllowedOrigin(origin, config.security)) {
+              sendJsonError(res, 403, `Origin ${origin} is not allowed`, 'origin_not_allowed');
+              return;
+            }
+
+            const csrfDenial = validateSessionCsrf(req, authManager);
+            if (csrfDenial) {
+              sendJsonError(res, csrfDenial.statusCode, csrfDenial.message, csrfDenial.code);
+              return;
+            }
+
+            try {
+              authManager.logout(sessionId);
+            } catch {
+              sendJsonError(res, 500, 'Local auth is misconfigured', 'auth_config_error');
+              return;
+            }
+          }
+
+          sendJson(res, 200, { success: true }, {
+            'set-cookie': buildClearedSessionCookie(secure),
+          });
+          return;
+        }
+
+        if (method === 'POST' && url === '/api/auth/change-password') {
+          if (!authManager?.isConfigured()) {
+            sendJsonError(res, 409, 'Local dashboard auth is not configured. Run `govyn admin setup`.', 'auth_not_configured');
+            return;
+          }
+
+          const sessionId = parseCookie(req.headers.cookie, SESSION_COOKIE_NAME);
+          const session = sessionId ? authManager.getSession(sessionId) : null;
+          if (!sessionId || !session) {
+            sendJsonError(res, 401, 'A valid dashboard session is required', 'dashboard_auth_required');
+            return;
+          }
+
+          const csrfDenial = validateSessionCsrf(req, authManager);
+          if (csrfDenial) {
+            sendJsonError(res, csrfDenial.statusCode, csrfDenial.message, csrfDenial.code);
+            return;
+          }
+
+          readRequestBody(req).then((bodyBuffer) => {
+            let parsed: { current_password?: string; new_password?: string };
+            try {
+              parsed = JSON.parse(bodyBuffer.toString('utf8')) as { current_password?: string; new_password?: string };
+            } catch {
+              sendJsonError(res, 400, 'Invalid JSON body', 'invalid_request');
+              return;
+            }
+
+            if (!parsed.current_password || !parsed.new_password) {
+              sendJsonError(res, 400, 'Missing current_password or new_password', 'invalid_request');
+              return;
+            }
+
+            try {
+              authManager.changePassword(sessionId, parsed.current_password, parsed.new_password);
+              sendJson(res, 200, {
+                success: true,
+                message: 'Password updated. Sign in again with the new password.',
+              }, {
+                'set-cookie': buildClearedSessionCookie(isSecureRequest(req)),
+              });
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Could not update password';
+              sendJsonError(res, 400, message, 'invalid_request');
+            }
+          }).catch(() => {
+            sendJsonError(res, 400, 'Invalid request body', 'invalid_request');
+          });
+          return;
+        }
+
+        sendJsonError(res, 404, `No route matched for: ${url}`, 'not_found');
+        return;
       }
 
       // Health check endpoint — serve before proxy routing
@@ -291,91 +817,117 @@ export function startServer(
       }
 
       // Alert management API endpoints
-      if (url.startsWith('/api/alerts') && sql && alertManager) {
-        handleAlertApi(req, res, sql, alertManager);
-        return;
+      if (url.startsWith('/api/alerts')) {
+        if (alertManager) {
+          handleAlertApi(req, res, alertManager);
+          return;
+        }
+
+        if (handleUnavailableAlerts(req, res)) {
+          return;
+        }
       }
 
-      // Approval list endpoint: GET /api/approvals (without trailing ID)
-      if (method === 'GET' && /^\/api\/approvals(\?|$)/.test(url) && sql) {
-        handleApprovalApi(req, res, sql);
-        return;
-      }
-
-      // Approval polling endpoint: GET /api/approvals/:id
-      if (method === 'GET' && url.startsWith('/api/approvals/') && approvalManager) {
-        const id = url.replace('/api/approvals/', '').split('?')[0];
-        approvalManager.getApprovalStatus(id).then((status) => {
-          if (!status) {
-            sendJsonError(res, 404, 'Approval request not found', 'not_found');
+      if (url.startsWith('/api/approvals')) {
+        // Approval list endpoint: GET /api/approvals (without trailing ID)
+        if (method === 'GET' && /^\/api\/approvals(\?|$)/.test(url)) {
+          if (approvalManager) {
+            handleApprovalApi(req, res, approvalManager);
             return;
           }
-          const responseBody = JSON.stringify({
-            id: status.id,
-            status: status.status,
-            approval_token: status.approvalToken ?? null,
-            decided_at: status.decidedAt ?? null,
-            expires_at: status.expiresAt,
-          });
-          res.writeHead(200, {
-            'content-type': 'application/json',
-            'content-length': Buffer.byteLength(responseBody).toString(),
-          });
-          res.end(responseBody);
-        }).catch(() => {
-          sendJsonError(res, 500, 'Failed to fetch approval status', 'internal_error');
-        });
-        return;
-      }
 
-      // Approval approve/deny endpoints: POST /api/approvals/:id/approve or /api/approvals/:id/deny
-      if (method === 'POST' && url.startsWith('/api/approvals/') && approvalManager) {
-        const approveMatch = url.match(/^\/api\/approvals\/([^/]+)\/(approve|deny)$/);
-        if (approveMatch) {
-          const requestId = approveMatch[1];
-          const action = approveMatch[2] as 'approve' | 'deny';
+          if (handleUnavailableApprovals(req, res)) {
+            return;
+          }
+        }
 
-          const apiBodyChunks: Buffer[] = [];
-          req.on('data', (chunk: Buffer) => apiBodyChunks.push(chunk));
-          req.on('end', () => {
-            (async () => {
-              try {
-                const apiBodyStr = Buffer.concat(apiBodyChunks).toString('utf8');
-                const parsed = apiBodyStr ? JSON.parse(apiBodyStr) as { decided_by?: string; notes?: string } : {};
-
-                const decidedBy = parsed.decided_by ?? 'api';
-
-                let success: boolean;
-                if (action === 'approve') {
-                  success = await approvalManager.approveRequest(requestId, decidedBy, parsed.notes);
-                } else {
-                  success = await approvalManager.denyRequest(requestId, decidedBy, parsed.notes);
-                }
-
-                if (success) {
-                  const responseBody = JSON.stringify({ success: true, id: requestId, action });
-                  res.writeHead(200, {
-                    'content-type': 'application/json',
-                    'content-length': Buffer.byteLength(responseBody).toString(),
-                  });
-                  res.end(responseBody);
-
-                  // Audit trail (fire-and-forget)
-                  dbWriter?.writeApprovalEvent({
-                    requestId,
-                    action: action === 'approve' ? 'approved' : 'denied',
-                    decidedBy,
-                    notes: parsed.notes,
-                  }).catch(() => {});
-                } else {
-                  sendJsonError(res, 404, `Approval request not found or not pending`, 'not_found');
-                }
-              } catch {
-                sendJsonError(res, 400, 'Invalid JSON body', 'invalid_request');
+        // Approval polling endpoint: GET /api/approvals/:id
+        if (method === 'GET' && url.startsWith('/api/approvals/')) {
+          if (!approvalManager) {
+            if (handleUnavailableApprovals(req, res)) {
+              return;
+            }
+          } else {
+            const id = url.replace('/api/approvals/', '').split('?')[0];
+            approvalManager.getApprovalStatus(id).then((status) => {
+              if (!status) {
+                sendJsonError(res, 404, 'Approval request not found', 'not_found');
+                return;
               }
-            })();
-          });
-          return;
+              const responseBody = JSON.stringify({
+                id: status.id,
+                status: status.status,
+                approval_token: status.approvalToken ?? null,
+                decided_at: status.decidedAt ?? null,
+                expires_at: status.expiresAt,
+              });
+              res.writeHead(200, {
+                'content-type': 'application/json',
+                'content-length': Buffer.byteLength(responseBody).toString(),
+              });
+              res.end(responseBody);
+            }).catch(() => {
+              sendJsonError(res, 500, 'Failed to fetch approval status', 'internal_error');
+            });
+            return;
+          }
+        }
+
+        // Approval approve/deny endpoints: POST /api/approvals/:id/approve or /api/approvals/:id/deny
+        if (method === 'POST' && url.startsWith('/api/approvals/')) {
+          if (!approvalManager) {
+            if (handleUnavailableApprovals(req, res)) {
+              return;
+            }
+          }
+
+          const approveMatch = url.match(/^\/api\/approvals\/([^/]+)\/(approve|deny)$/);
+          if (approveMatch && approvalManager) {
+            const requestId = approveMatch[1];
+            const action = approveMatch[2] as 'approve' | 'deny';
+
+            const apiBodyChunks: Buffer[] = [];
+            req.on('data', (chunk: Buffer) => apiBodyChunks.push(chunk));
+            req.on('end', () => {
+              (async () => {
+                try {
+                  const apiBodyStr = Buffer.concat(apiBodyChunks).toString('utf8');
+                  const parsed = apiBodyStr ? JSON.parse(apiBodyStr) as { decided_by?: string; notes?: string } : {};
+
+                  const decidedBy = parsed.decided_by ?? 'api';
+
+                  let success: boolean;
+                  if (action === 'approve') {
+                    success = await approvalManager.approveRequest(requestId, decidedBy, parsed.notes);
+                  } else {
+                    success = await approvalManager.denyRequest(requestId, decidedBy, parsed.notes);
+                  }
+
+                  if (success) {
+                    const responseBody = JSON.stringify({ success: true, id: requestId, action });
+                    res.writeHead(200, {
+                      'content-type': 'application/json',
+                      'content-length': Buffer.byteLength(responseBody).toString(),
+                    });
+                    res.end(responseBody);
+
+                    // Audit trail (fire-and-forget)
+                    dbWriter?.writeApprovalEvent({
+                      requestId,
+                      action: action === 'approve' ? 'approved' : 'denied',
+                      decidedBy,
+                      notes: parsed.notes,
+                    }).catch(() => {});
+                  } else {
+                    sendJsonError(res, 404, `Approval request not found or not pending`, 'not_found');
+                  }
+                } catch {
+                  sendJsonError(res, 400, 'Invalid JSON body', 'invalid_request');
+                }
+              })();
+            });
+            return;
+          }
         }
       }
 
@@ -387,6 +939,11 @@ export function startServer(
 
       // Resolve agent identity before routing
       const agentIdentity = resolveAgentId(req, config.agents);
+
+      if (!isApiRequest && config.security?.requireAgentApiKey && agentIdentity.source !== 'api-key') {
+        sendJsonError(res, 401, 'Proxy requests require a valid agent API key', 'proxy_auth_required');
+        return;
+      }
 
       // Check budget before forwarding
       const budgetResult = enforcer.checkBudget(agentIdentity.agentId);
@@ -503,12 +1060,17 @@ export function startServer(
         (async () => {
         const bodyBuffer = Buffer.concat(bodyChunks);
         const bodyString = bodyBuffer.length > 0 ? bodyBuffer.toString('utf8') : undefined;
+        const requestHash = hashApprovalRequest(bodyBuffer);
 
         // Approval token bypass: if X-Govyn-Approval header is present, validate and skip policies
         const approvalToken = req.headers['x-govyn-approval'] as string | undefined;
         if (approvalToken && approvalManager) {
           try {
-            const tokenResult = await approvalManager.validateAndConsumeToken(approvalToken);
+            const tokenResult = await approvalManager.validateAndConsumeToken(approvalToken, {
+              agentId: agentIdentity.agentId,
+              targetPath: routeMatch.upstreamPath,
+              requestHash,
+            });
             if (tokenResult) {
               // Token is valid — skip policy evaluation, forward request directly
               dbWriter?.writeApprovalEvent({
@@ -703,6 +1265,7 @@ export function startServer(
                 policyName: approvalResult.policyName,
                 estimatedCost: undefined,
                 requestSummary: summary,
+                requestHash,
                 requestPayload: approvalResult.storePayload ? JSON.parse(bodyString ?? '{}') : undefined,
                 timeoutSeconds: approvalResult.timeoutSeconds,
               });
@@ -729,9 +1292,9 @@ export function startServer(
               }).catch(() => {});
 
               return;
-            } catch (err) {
-              const errMsg = err instanceof Error ? err.message : 'Unknown error';
-              sendJsonError(res, 500, `Failed to create approval request: ${errMsg}`, 'internal_error');
+            } catch {
+              console.error('[server] failed to create approval request');
+              sendJsonError(res, 500, 'Failed to create approval request', 'internal_error');
               return;
             }
           }

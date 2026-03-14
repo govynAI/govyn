@@ -4,11 +4,11 @@ import { ArrowLeft, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import PolicyEditor, {
-  type PolicyEditorHandle,
-} from "@/components/policies/PolicyEditor";
+import LazyPolicyEditor from "@/components/policies/LazyPolicyEditor";
+import type { PolicyEditorHandle } from "@/components/policies/PolicyEditor";
 import { PolicyErrorPanel } from "@/components/policies/PolicyErrorPanel";
 import { usePolicy } from "@/hooks/usePolicy";
+import { loadPolicyEditorModule } from "@/lib/dashboard-imports";
 import type { PolicyType } from "@/types/api";
 
 /** Badge color mapping for each policy type */
@@ -84,6 +84,10 @@ export default function PolicyDetailPage() {
       setSavedYaml(policy.yaml);
     }
   }, [policy?.yaml, isDirty]);
+
+  useEffect(() => {
+    void loadPolicyEditorModule();
+  }, []);
 
   // Unsaved changes warning
   useEffect(() => {
@@ -247,7 +251,7 @@ export default function PolicyDetailPage() {
 
       {/* Editor area */}
       <div className="flex-1 overflow-auto p-6 space-y-4">
-        <PolicyEditor
+        <LazyPolicyEditor
           ref={editorRef}
           value={currentYaml}
           onChange={handleChange}

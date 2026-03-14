@@ -30,6 +30,17 @@ import type { ActionLogger } from './action-logger.js';
 import { govynEvents } from './events.js';
 import type { DbWriter } from './db-writer.js';
 
+const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+]);
+
 /**
  * Select the appropriate header mapping function based on provider type.
  */
@@ -274,7 +285,7 @@ export async function forwardRequest(
       // Upstream errors (4xx, 5xx) are passed through without modification.
       const responseHeaders: Record<string, string | string[]> = {};
       for (const [key, value] of Object.entries(upstreamRes.headers)) {
-        if (value !== undefined) {
+        if (value !== undefined && !HOP_BY_HOP_RESPONSE_HEADERS.has(key.toLowerCase())) {
           responseHeaders[key] = value;
         }
       }
@@ -516,7 +527,7 @@ export async function forwardRequest(
       sendErrorResponse(
         res,
         502,
-        `Upstream connection failed: ${err.message}`,
+        'Upstream connection failed',
         'upstream_connection_error',
       );
       resolve();

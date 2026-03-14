@@ -135,6 +135,17 @@ policies:
     expect(output).toContain('Usage:');
   });
 
+  it('treats option-first invocation as proxy start instead of unknown command', () => {
+    const missingConfigPath = path.join(tmpDir, 'missing-config.yaml');
+
+    const result = runCli(`--config "${missingConfigPath}"`);
+    expect(result.exitCode).toBe(1);
+
+    const output = result.stdout + result.stderr;
+    expect(output).not.toContain('Unknown command: --config');
+    expect(output).toContain('Failed to read config file');
+  });
+
   it('validates multiple policies and shows summaries', () => {
     const filePath = writeTempFile('multi.yaml', `version: 1
 policies:

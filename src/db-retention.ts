@@ -10,16 +10,22 @@
  */
 
 import type postgres from 'postgres';
+import type { RetentionStore } from './persistence-types.js';
+import { adaptRetentionStore } from './persistence.js';
 
 /**
  * RetentionManager aggregates and cleans up old database records.
  */
 export class RetentionManager {
+  private readonly store: RetentionStore;
+
   constructor(
-    private sql: postgres.Sql,
+    storeOrSql: RetentionStore | postgres.Sql,
     private retentionDays: number,
     private approvalRetentionDays: number,
-  ) {}
+  ) {
+    this.store = adaptRetentionStore(storeOrSql, retentionDays, approvalRetentionDays);
+  }
 
   /**
    * Aggregate old cost records into daily summaries, then delete the raw records.
@@ -32,42 +38,7 @@ export class RetentionManager {
    */
   async cleanupCostRecords(): Promise<{ aggregated: number; deleted: number }> {
     const cutoff = new Date(Date.now() - this.retentionDays * 24 * 60 * 60 * 1000);
-
-    // Aggregate into daily summaries (upsert for idempotency)
-    const aggregateResult = await this.sql`
-      INSERT INTO cost_daily_summary (agent_id, model, provider, date, total_requests, total_input_tokens, total_output_tokens, total_input_cost, total_output_cost, total_cost)
-      SELECT
-        agent_id,
-        model,
-        provider,
-        DATE(created_at) as date,
-        COUNT(*)::INTEGER as total_requests,
-        SUM(input_tokens)::BIGINT as total_input_tokens,
-        SUM(output_tokens)::BIGINT as total_output_tokens,
-        SUM(input_cost) as total_input_cost,
-        SUM(output_cost) as total_output_cost,
-        SUM(total_cost) as total_cost
-      FROM cost_records
-      WHERE created_at < ${cutoff}
-      GROUP BY agent_id, model, provider, DATE(created_at)
-      ON CONFLICT (agent_id, model, provider, date) DO UPDATE SET
-        total_requests = cost_daily_summary.total_requests + EXCLUDED.total_requests,
-        total_input_tokens = cost_daily_summary.total_input_tokens + EXCLUDED.total_input_tokens,
-        total_output_tokens = cost_daily_summary.total_output_tokens + EXCLUDED.total_output_tokens,
-        total_input_cost = cost_daily_summary.total_input_cost + EXCLUDED.total_input_cost,
-        total_output_cost = cost_daily_summary.total_output_cost + EXCLUDED.total_output_cost,
-        total_cost = cost_daily_summary.total_cost + EXCLUDED.total_cost
-    `;
-
-    // Delete old raw records
-    const deleteResult = await this.sql`
-      DELETE FROM cost_records WHERE created_at < ${cutoff}
-    `;
-
-    return {
-      aggregated: aggregateResult.count,
-      deleted: deleteResult.count,
-    };
+    return this.store.cleanupCostRecords(cutoff);
   }
 
   /**
@@ -78,12 +49,7 @@ export class RetentionManager {
    */
   async cleanupPolicyEvaluations(): Promise<number> {
     const cutoff = new Date(Date.now() - this.retentionDays * 24 * 60 * 60 * 1000);
-
-    const result = await this.sql`
-      DELETE FROM policy_evaluations WHERE created_at < ${cutoff}
-    `;
-
-    return result.count;
+    return this.store.cleanupPolicyEvaluations(cutoff);
   }
 
   /**
@@ -94,12 +60,7 @@ export class RetentionManager {
    */
   async cleanupApprovalRecords(): Promise<number> {
     const cutoff = new Date(Date.now() - this.approvalRetentionDays * 24 * 60 * 60 * 1000);
-
-    const result = await this.sql`
-      DELETE FROM approval_requests WHERE created_at < ${cutoff}
-    `;
-
-    return result.count;
+    return this.store.cleanupApprovalRecords(cutoff);
   }
 
   /**

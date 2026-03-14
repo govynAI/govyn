@@ -5,13 +5,12 @@ import EmptyState from "@/components/EmptyState";
 import { PeriodSwitcher } from "@/components/costs/PeriodSwitcher";
 import { StatCards } from "@/components/costs/StatCards";
 import { AgentCostTable } from "@/components/costs/AgentCostTable";
-import {
-  CostAreaChart,
-  type CostChartDataPoint,
-} from "@/components/costs/CostAreaChart";
+import LazyCostAreaChart from "@/components/costs/LazyCostAreaChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCosts } from "@/hooks/useCosts";
+import { useCostTimeseries } from "@/hooks/useCostTimeseries";
 import { useBudgets } from "@/hooks/useBudgets";
+import { toCostChartData } from "@/lib/cost-chart";
 import type { DashboardPeriod } from "@/types/api";
 
 const emptyTotals = { cost: 0, requests: 0, input_tokens: 0, output_tokens: 0 };
@@ -19,26 +18,15 @@ const emptyTotals = { cost: 0, requests: 0, input_tokens: 0, output_tokens: 0 };
 export default function CostsPage() {
   const [period, setPeriod] = useState<DashboardPeriod>("today");
   const { data, loading } = useCosts(period);
+  const { data: timeseriesData } = useCostTimeseries(period);
   const { data: budgetData, loading: budgetLoading } = useBudgets();
 
   const hasData = data !== null && data.agents.length > 0;
 
-  const { chartData, agentIds } = useMemo(() => {
-    if (!data || data.agents.length === 0) return { chartData: [], agentIds: [] };
-
-    const ids = data.agents.map((a) => a.agentId);
-    const timestamp = new Date(data.generated_at).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-
-    const point: CostChartDataPoint = { label: timestamp, total: data.totals.cost };
-    for (const agent of data.agents) {
-      point[agent.agentId] = agent.totalCost;
-    }
-
-    return { chartData: [point], agentIds: ids };
-  }, [data]);
+  const { chartData, agentIds } = useMemo(
+    () => toCostChartData(timeseriesData?.points ?? []),
+    [timeseriesData?.points],
+  );
 
   return (
     <>
@@ -62,10 +50,10 @@ export default function CostsPage() {
             />
             <Card>
               <CardHeader>
-                <CardTitle>Cost Distribution</CardTitle>
+                <CardTitle>Spending Over Time</CardTitle>
               </CardHeader>
               <CardContent>
-                <CostAreaChart data={chartData} agents={agentIds} stacked />
+                <LazyCostAreaChart data={chartData} agents={agentIds} stacked />
               </CardContent>
             </Card>
           </>

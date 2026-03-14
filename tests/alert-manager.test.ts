@@ -7,6 +7,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+const { deliverWebhookJsonMock, resolveWebhookTargetMock } = vi.hoisted(() => ({
+  deliverWebhookJsonMock: vi.fn(),
+  resolveWebhookTargetMock: vi.fn(),
+}));
+vi.mock('../src/security.js', () => ({
+  deliverWebhookJson: deliverWebhookJsonMock,
+  resolveWebhookTarget: resolveWebhookTargetMock,
+}));
 import { AlertManager } from '../src/alert-manager.js';
 import type { AlertRule, BudgetThresholdConfig, PolicyTriggerConfig } from '../src/alert-manager.js';
 import { govynEvents } from '../src/events.js';
@@ -78,20 +86,18 @@ function mockSql(rules: AlertRule[] = []) {
 // ---- Tests ----
 
 describe('AlertManager', () => {
-  let fetchSpy: ReturnType<typeof vi.fn>;
-  let originalFetch: typeof globalThis.fetch;
-
   beforeEach(() => {
-    originalFetch = globalThis.fetch;
-    fetchSpy = vi.fn().mockResolvedValue({
+    resolveWebhookTargetMock.mockResolvedValue({
       ok: true,
-      status: 200,
+      target: {
+        normalizedUrl: 'https://hooks.example.com/test',
+      },
     });
-    globalThis.fetch = fetchSpy;
+    deliverWebhookJsonMock.mockResolvedValue({ status: 200 });
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    vi.clearAllMocks();
     govynEvents.removeAllListeners();
   });
 
@@ -352,20 +358,16 @@ describe('AlertManager', () => {
 
       await manager.fireAlert(rule, event);
 
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      const [url, options] = fetchSpy.mock.calls[0];
-      expect(url).toBe('https://hooks.example.com/budget');
-      expect(options.method).toBe('POST');
-      expect(options.headers['Content-Type']).toBe('application/json');
-      expect(options.headers['User-Agent']).toBe('Govyn-Alerts/1.0');
+      expect(resolveWebhookTargetMock).toHaveBeenCalledWith('https://hooks.example.com/budget');
+      expect(deliverWebhookJsonMock).toHaveBeenCalledOnce();
 
-      const body = JSON.parse(options.body);
-      expect(body.alert.rule_id).toBe('rule-budget-1');
-      expect(body.alert.rule_name).toBe('High spend warning');
-      expect(body.alert.rule_type).toBe('budget_threshold');
-      expect(body.event.type).toBe('budget_warning');
-      expect(body.source).toBe('govyn');
-      expect(body.fired_at).toBeDefined();
+      const [, payload] = deliverWebhookJsonMock.mock.calls[0];
+      expect(payload.alert.rule_id).toBe('rule-budget-1');
+      expect(payload.alert.rule_name).toBe('High spend warning');
+      expect(payload.alert.rule_type).toBe('budget_threshold');
+      expect(payload.event.type).toBe('budget_warning');
+      expect(payload.source).toBe('govyn');
+      expect(payload.fired_at).toBeDefined();
     });
 
     it('records fired alert in alert_history table', async () => {
@@ -394,7 +396,7 @@ describe('AlertManager', () => {
     });
 
     it('handles webhook delivery failure gracefully', async () => {
-      fetchSpy.mockRejectedValueOnce(new Error('Network error'));
+      deliverWebhookJsonMock.mockRejectedValueOnce(new Error('Network error'));
 
       const rule = makeBudgetRule();
       const sql = mockSql();
@@ -414,6 +416,34 @@ describe('AlertManager', () => {
       await expect(manager.fireAlert(rule, event)).resolves.not.toThrow();
 
       // Should still have called sql for history recording
+      expect(sql).toHaveBeenCalled();
+    });
+
+    it('blocks private or loopback webhook destinations before fetch', async () => {
+      resolveWebhookTargetMock.mockResolvedValueOnce({
+        ok: false,
+        error: 'Invalid webhook_url: private, loopback, or local-network destinations are not allowed',
+      });
+
+      const rule = makeBudgetRule({
+        webhookUrl: 'http://127.0.0.1:9000/internal-hook',
+      });
+      const sql = mockSql();
+      const manager = new AlertManager(sql);
+
+      const event = {
+        type: 'budget_warning' as const,
+        agentId: 'research-agent',
+        percentUsed: 85,
+        currentSpend: 8.5,
+        limit: 10,
+        resetsAt: '2026-03-01T00:00:00Z',
+        limitPeriod: 'daily' as const,
+      };
+
+      await manager.fireAlert(rule, event);
+
+      expect(deliverWebhookJsonMock).not.toHaveBeenCalled();
       expect(sql).toHaveBeenCalled();
     });
   });
@@ -481,7 +511,7 @@ describe('AlertManager', () => {
       await new Promise((r) => setTimeout(r, 50));
 
       // Webhook should not have been called
-      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(deliverWebhookJsonMock).not.toHaveBeenCalled();
 
       manager.stop();
     });
@@ -521,7 +551,7 @@ describe('AlertManager', () => {
       await new Promise((r) => setTimeout(r, 50));
 
       // No webhook calls should have been made
-      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(deliverWebhookJsonMock).not.toHaveBeenCalled();
     });
   });
 });

@@ -132,6 +132,26 @@ export interface CostSummary {
   models: Record<string, { cost: number; requests: number; inputTokens: number; outputTokens: number }>;
 }
 
+export type CostTimeSeriesBucket = 'hour' | 'day' | 'month';
+
+export interface CostTimeSeriesPoint {
+  /** Start timestamp for this bucket (UTC ISO 8601). */
+  timestamp: string;
+  /** Human-readable label for charts. */
+  label: string;
+  /** Total spend across all agents in this bucket. */
+  total: number;
+  /** Per-agent spend in this bucket. */
+  agents: Record<string, number>;
+}
+
+export interface CostTimeSeriesResult {
+  /** Bucket resolution used for this query. */
+  bucket: CostTimeSeriesBucket;
+  /** Ordered series of chart points. */
+  points: CostTimeSeriesPoint[];
+}
+
 /**
  * Time period for cost aggregation queries.
  * - 'hour': last 60 minutes
@@ -279,11 +299,11 @@ export interface LoggingConfig {
 
 /**
  * Database persistence configuration.
- * When defined, the proxy writes cost records and policy evaluations to PostgreSQL.
- * When undefined, the proxy runs without database persistence (same as v1.1).
+ * Govyn uses SQLite by default for self-hosted OSS installs and can be switched
+ * to PostgreSQL for larger or multi-instance deployments.
  */
 export interface DatabaseConfig {
-  /** PostgreSQL connection URL (postgres://...) */
+  /** Database connection URL: sqlite:./govyn.db or postgres://... */
   url: string;
   /** Whether to continue proxying when DB is unavailable (default: true) */
   failOpen: boolean;
@@ -294,12 +314,30 @@ export interface DatabaseConfig {
 }
 
 /**
+ * Security controls for the management API and browser-based dashboard access.
+ */
+export interface SecurityConfig {
+  /** Env var name that stores the admin API key for remote management access. */
+  adminApiKeyEnv: string;
+  /** Exact browser origins allowed to call /api/* cross-origin. */
+  allowedOrigins: string[];
+  /** Whether loopback/localhost requests may access the management API without an admin key. */
+  allowLocalAdmin: boolean;
+  /** Whether proxied model requests must present a configured agent API key. */
+  requireAgentApiKey: boolean;
+  /** Path to the local single-admin auth store for the OSS dashboard. */
+  authFile?: string;
+  /** Dashboard session lifetime in hours (defaults applied if missing). */
+  sessionTtlHours?: number;
+}
+
+/**
  * Overall proxy server configuration.
  */
 export interface ProxyConfig {
   /** TCP port to listen on */
   port: number;
-  /** Host/address to bind to (e.g. 0.0.0.0) */
+  /** Host/address to bind to (e.g. 127.0.0.1 for local-only or 0.0.0.0 for remote access) */
   host: string;
   /** Map of provider name to provider configuration */
   providers: Map<string, ProviderConfig>;
@@ -313,6 +351,8 @@ export interface ProxyConfig {
   logging?: LoggingConfig;
   /** Path to the YAML policy file (optional — no policies if not set) */
   policiesFile?: string;
-  /** Database persistence configuration (optional — no DB if not set) */
+  /** Database persistence configuration */
   database?: DatabaseConfig;
+  /** Management API and CORS security configuration */
+  security?: SecurityConfig;
 }

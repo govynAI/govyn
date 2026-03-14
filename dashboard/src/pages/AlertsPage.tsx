@@ -31,6 +31,8 @@ export default function AlertsPage() {
     rules,
     loading: rulesLoading,
     error: rulesError,
+    available: rulesAvailable,
+    unavailableReason: rulesUnavailableReason,
     createRule,
     updateRule,
     deleteRule,
@@ -43,6 +45,8 @@ export default function AlertsPage() {
     total: historyTotal,
     loading: historyLoading,
     error: historyError,
+    available: historyAvailable,
+    unavailableReason: historyUnavailableReason,
   } = useAlertHistory();
 
   const handleCreate = useCallback(() => {
@@ -114,6 +118,25 @@ export default function AlertsPage() {
           title="Connect to proxy"
           description="Connect to a Govyn proxy to configure and manage alert rules"
           action={{ label: "Go to Settings", href: "/settings" }}
+        />
+      </>
+    );
+  }
+
+  const alertsAvailable = rulesAvailable && historyAvailable;
+  const alertsUnavailableReason =
+    rulesUnavailableReason ??
+    historyUnavailableReason ??
+    "Alerts are unavailable on this proxy.";
+
+  if (!alertsAvailable) {
+    return (
+      <>
+        <PageHeader title="Alerts" />
+        <EmptyState
+          icon={Bell}
+          title="Alerts unavailable"
+          description={alertsUnavailableReason}
         />
       </>
     );

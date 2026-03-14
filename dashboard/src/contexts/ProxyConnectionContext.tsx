@@ -6,7 +6,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { getBaseUrl, setBaseUrl, ping } from "@/lib/api-client";
+import { getBaseUrl, normalizeProxyUrl, setBaseUrl, ping } from "@/lib/api-client";
 
 export type ConnectionStatus = "connected" | "disconnected" | "reconnecting";
 
@@ -99,8 +99,9 @@ export function ProxyConnectionProvider({
 
   const setProxyUrl = useCallback(
     (url: string) => {
-      setBaseUrl(url);
-      setProxyUrlState(url);
+      const normalized = normalizeProxyUrl(url);
+      setBaseUrl(normalized);
+      setProxyUrlState(normalized);
       failureCount.current = 0;
       setStatus("reconnecting");
     },

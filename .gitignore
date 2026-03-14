@@ -16,6 +16,12 @@ python-sdk/.pytest_cache/
 # Environment
 .env
 .env.*
+govyn.config.yaml
+govyn.auth.json
+govyn.db
+govyn.db-shm
+govyn.db-wal
+policies.yaml
 
 # Logs
 logs/

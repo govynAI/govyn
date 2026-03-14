@@ -152,4 +152,22 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX idx_alert_history_fired ON alert_history (fired_at);
     `,
   },
+  {
+    version: 3,
+    name: 'approval_request_binding',
+    sql: `
+      ALTER TABLE approval_requests
+        ADD COLUMN IF NOT EXISTS request_hash TEXT;
+
+      UPDATE approval_requests
+      SET request_hash = ''
+      WHERE request_hash IS NULL;
+
+      ALTER TABLE approval_requests
+        ALTER COLUMN request_hash SET NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_approvals_request_hash
+        ON approval_requests (request_hash);
+    `,
+  },
 ];

@@ -105,6 +105,7 @@ interface MockApprovalRecord {
   model?: string;
   targetPath: string;
   policyName: string;
+  requestHash: string;
   status: 'pending' | 'approved' | 'denied' | 'denied_timeout';
   approvalToken?: string;
   tokenUsed: boolean;
@@ -126,6 +127,7 @@ class MockApprovalManager {
     policyRule?: string;
     estimatedCost?: number;
     requestSummary: string;
+    requestHash: string;
     requestPayload?: unknown;
     timeoutSeconds: number;
   }): Promise<{ id: string; pollingUrl: string; expiresAt: string }> {
@@ -138,6 +140,7 @@ class MockApprovalManager {
       model: params.model,
       targetPath: params.targetPath,
       policyName: params.policyName,
+      requestHash: params.requestHash,
       status: 'pending',
       tokenUsed: false,
       expiresAt,
@@ -164,20 +167,24 @@ class MockApprovalManager {
     };
   }
 
-  async validateAndConsumeToken(token: string): Promise<{
-    agentId: string;
-    policyName: string;
-    targetPath: string;
-  } | null> {
+  async validateAndConsumeToken(
+    token: string,
+    expected: { agentId: string; targetPath: string; requestHash: string },
+  ): Promise<{ policyName: string } | null> {
     const recordId = this.tokenIndex.get(token);
     if (!recordId) return null;
     const record = this.records.get(recordId);
     if (!record || record.status !== 'approved' || record.tokenUsed) return null;
+    if (
+      record.agentId !== expected.agentId ||
+      record.targetPath !== expected.targetPath ||
+      record.requestHash !== expected.requestHash
+    ) {
+      return null;
+    }
     record.tokenUsed = true;
     return {
-      agentId: record.agentId,
       policyName: record.policyName,
-      targetPath: record.targetPath,
     };
   }
 
@@ -516,6 +523,108 @@ describe('approval flow integration', () => {
       });
       expect(secondUse.statusCode).toBe(403);
       const errorBody = secondUse.json as { error: { code: string } };
+      expect(errorBody.error.code).toBe('invalid_approval_token');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('Test 5b: Approval token is bound to the approved request body', async () => {
+    const { aggregator, policyEngine, mockApprovalManager, mockDbWriter, config } = createTestSetup();
+
+    const server = startServer(
+      config, aggregator, undefined, undefined, undefined,
+      policyEngine, mockDbWriter as unknown as DbWriter, mockApprovalManager as unknown as ApprovalManager,
+    );
+    await waitForListen(server);
+    const port = (server.address() as { port: number }).port;
+
+    try {
+      const createRes = await httpRequest({
+        port,
+        path: '/v1/openai/v1/chat/completions',
+        method: 'POST',
+        headers: { 'x-govyn-agent': 'test-agent', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content: 'Hello' }] }),
+      });
+      const createBody = createRes.json as { approval_id: string; polling_url: string };
+
+      await httpRequest({
+        port,
+        path: `/api/approvals/${createBody.approval_id}/approve`,
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decided_by: 'admin' }),
+      });
+
+      const pollRes = await httpRequest({ port, path: createBody.polling_url, method: 'GET' });
+      const pollBody = pollRes.json as { approval_token: string };
+
+      const modifiedRequest = await httpRequest({
+        port,
+        path: '/v1/openai/v1/chat/completions',
+        method: 'POST',
+        headers: {
+          'x-govyn-agent': 'test-agent',
+          'content-type': 'application/json',
+          'x-govyn-approval': pollBody.approval_token,
+        },
+        body: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content: 'Different prompt' }] }),
+      });
+
+      expect(modifiedRequest.statusCode).toBe(403);
+      const errorBody = modifiedRequest.json as { error: { code: string } };
+      expect(errorBody.error.code).toBe('invalid_approval_token');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('Test 5c: Approval token is bound to the approved agent identity', async () => {
+    const { aggregator, policyEngine, mockApprovalManager, mockDbWriter, config } = createTestSetup();
+
+    const server = startServer(
+      config, aggregator, undefined, undefined, undefined,
+      policyEngine, mockDbWriter as unknown as DbWriter, mockApprovalManager as unknown as ApprovalManager,
+    );
+    await waitForListen(server);
+    const port = (server.address() as { port: number }).port;
+
+    try {
+      const createRes = await httpRequest({
+        port,
+        path: '/v1/openai/v1/chat/completions',
+        method: 'POST',
+        headers: { 'x-govyn-agent': 'test-agent', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content: 'Hello' }] }),
+      });
+      const createBody = createRes.json as { approval_id: string; polling_url: string };
+
+      await httpRequest({
+        port,
+        path: `/api/approvals/${createBody.approval_id}/approve`,
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decided_by: 'admin' }),
+      });
+
+      const pollRes = await httpRequest({ port, path: createBody.polling_url, method: 'GET' });
+      const pollBody = pollRes.json as { approval_token: string };
+
+      const impersonatedRequest = await httpRequest({
+        port,
+        path: '/v1/openai/v1/chat/completions',
+        method: 'POST',
+        headers: {
+          'x-govyn-agent': 'other-agent',
+          'content-type': 'application/json',
+          'x-govyn-approval': pollBody.approval_token,
+        },
+        body: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content: 'Hello' }] }),
+      });
+
+      expect(impersonatedRequest.statusCode).toBe(403);
+      const errorBody = impersonatedRequest.json as { error: { code: string } };
       expect(errorBody.error.code).toBe('invalid_approval_token');
     } finally {
       server.close();

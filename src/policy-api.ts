@@ -15,37 +15,13 @@
 
 import * as http from 'node:http';
 import * as fs from 'node:fs';
-import { parseDocument, stringify } from 'yaml';
+import { parseDocument } from 'yaml';
 import type { YAMLMap, YAMLSeq, Scalar } from 'yaml';
 import { isMap, isSeq, isScalar } from 'yaml';
 import { parsePolicies } from './policy-parser.js';
+import { ensurePolicyFile, policyToYaml } from './policy-file.js';
 import type { PolicyEngine } from './policy-engine.js';
 import type { Policy } from './policy-types.js';
-
-/**
- * Serialize a single policy into a complete policy document YAML string.
- * Wraps the policy in version: 1, policies: [...] structure.
- */
-function policyToYaml(policy: Policy): string {
-  const doc = { version: 1, policies: [policyToPlainObject(policy)] };
-  return stringify(doc, { indent: 2 });
-}
-
-/**
- * Convert a Policy to a plain object suitable for YAML serialization.
- * Converts the scope object back to the string format used in YAML files.
- */
-function policyToPlainObject(policy: Policy): Record<string, unknown> {
-  const obj: Record<string, unknown> = { ...policy };
-  // Convert scope to string format
-  const scope = policy.scope;
-  if (scope.level === 'global') {
-    obj.scope = 'global';
-  } else {
-    obj.scope = `${scope.level}:${scope.value}`;
-  }
-  return obj;
-}
 
 /**
  * Build a summary object from a policy.
@@ -198,6 +174,8 @@ export async function handlePolicyApi(
         return;
       }
 
+      ensurePolicyFile(configPoliciesFile, policyEngine.getPolicies());
+
       // Read and parse the YAML file using Document API to preserve formatting
       const fileContent = fs.readFileSync(configPoliciesFile, 'utf8');
       const doc = parseDocument(fileContent);
@@ -271,6 +249,8 @@ export async function handlePolicyApi(
         sendJson(res, 500, { error: { message: 'No policies file configured', code: 'no_config' } });
         return;
       }
+
+      ensurePolicyFile(configPoliciesFile, policyEngine.getPolicies());
 
       // Read the full policy file from disk
       const fileContent = fs.readFileSync(configPoliciesFile, 'utf8');
@@ -354,14 +334,10 @@ export async function handlePolicyApi(
         return;
       }
 
+      ensurePolicyFile(configPoliciesFile, policyEngine.getPolicies());
+
       // Read the full policy file from disk
-      let fileContent: string;
-      try {
-        fileContent = fs.readFileSync(configPoliciesFile, 'utf8');
-      } catch {
-        // File doesn't exist yet - create initial structure
-        fileContent = 'version: 1\npolicies: []\n';
-      }
+      const fileContent = fs.readFileSync(configPoliciesFile, 'utf8');
 
       const doc = parseDocument(fileContent);
       const policiesSeq = getPoliciesSeq(doc);
@@ -402,6 +378,8 @@ export async function handlePolicyApi(
         return;
       }
 
+      ensurePolicyFile(configPoliciesFile, policyEngine.getPolicies());
+
       const fileContent = fs.readFileSync(configPoliciesFile, 'utf8');
       const doc = parseDocument(fileContent);
       const policiesSeq = getPoliciesSeq(doc);
@@ -433,6 +411,6 @@ export async function handlePolicyApi(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('[policy-api] Error:', message);
-    sendJson(res, 500, { error: { message: `Internal error: ${message}`, code: 'internal_error' } });
+    sendJson(res, 500, { error: { message: 'Internal server error', code: 'internal_error' } });
   }
 }

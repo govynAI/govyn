@@ -8,11 +8,16 @@
  */
 
 import type postgres from 'postgres';
+import type { ApprovalStore } from './persistence-types.js';
+import { adaptApprovalStore } from './persistence.js';
 
 export class ApprovalTimeoutChecker {
   private interval: ReturnType<typeof setInterval> | null = null;
+  private readonly store: ApprovalStore;
 
-  constructor(private sql: postgres.Sql) {}
+  constructor(storeOrSql: ApprovalStore | postgres.Sql) {
+    this.store = adaptApprovalStore(storeOrSql);
+  }
 
   /**
    * Start checking for expired approvals every 30 seconds.
@@ -28,15 +33,11 @@ export class ApprovalTimeoutChecker {
    * Returns the number of records updated.
    */
   async expireTimedOut(): Promise<number> {
-    const result = await this.sql`
-      UPDATE approval_requests
-      SET status = 'denied_timeout', decided_at = NOW()
-      WHERE status = 'pending' AND expires_at < NOW()
-    `;
-    if (result.count > 0) {
-      console.log(`[govyn] Auto-denied ${result.count} expired approval request(s)`);
+    const count = await this.store.expireTimedOutApprovals();
+    if (count > 0) {
+      console.log(`[govyn] Auto-denied ${count} expired approval request(s)`);
     }
-    return result.count;
+    return count;
   }
 
   /**

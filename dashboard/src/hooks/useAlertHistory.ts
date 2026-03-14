@@ -13,6 +13,8 @@ interface UseAlertHistoryResult {
   total: number;
   loading: boolean;
   error: string | null;
+  available: boolean;
+  unavailableReason: string | null;
   refetch: () => void;
 }
 
@@ -30,6 +32,8 @@ export function useAlertHistory(
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [available, setAvailable] = useState(true);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
 
   const ruleId = options?.ruleId;
   const limit = options?.limit ?? 50;
@@ -58,6 +62,12 @@ export function useAlertHistory(
       const json = (await response.json()) as AlertHistoryApiResponse;
       setAlerts(json.alerts);
       setTotal(json.total);
+      setAvailable(json.available ?? true);
+      setUnavailableReason(
+        json.available === false
+          ? json.reason ?? "Alerts are unavailable on this proxy."
+          : null,
+      );
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unknown error fetching alert history";
@@ -71,5 +81,13 @@ export function useAlertHistory(
     fetchHistory();
   }, [fetchHistory]);
 
-  return { alerts, total, loading, error, refetch: fetchHistory };
+  return {
+    alerts,
+    total,
+    loading,
+    error,
+    available,
+    unavailableReason,
+    refetch: fetchHistory,
+  };
 }

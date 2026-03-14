@@ -12,31 +12,22 @@
 import type postgres from 'postgres';
 import type { CostRecord } from './types.js';
 import { govynEvents } from './events.js';
-
-/**
- * Policy evaluation data to be written to the database.
- */
-export interface PolicyEvaluationRecord {
-  agentId: string;
-  provider: string;
-  path: string;
-  allowed: boolean;
-  evaluatedCount: number;
-  matchedCount: number;
-  deniedBy?: string;
-  deniedReason?: string;
-  evaluationTimeMs?: number;
-}
+import type { PersistenceWriterStore, PolicyEvaluationRecord } from './persistence-types.js';
+import { adaptWriterStore } from './persistence.js';
 
 /**
  * DbWriter handles async persistence of cost records and policy evaluations
  * to PostgreSQL. All writes are designed for fire-and-forget usage.
  */
 export class DbWriter {
+  private readonly store: PersistenceWriterStore;
+
   constructor(
-    private sql: postgres.Sql,
+    storeOrSql: PersistenceWriterStore | postgres.Sql,
     private failOpen: boolean,
-  ) {}
+  ) {
+    this.store = adaptWriterStore(storeOrSql);
+  }
 
   /**
    * Write a cost record to the database.
@@ -46,10 +37,7 @@ export class DbWriter {
    */
   async writeCostRecord(record: CostRecord): Promise<void> {
     try {
-      await this.sql`
-        INSERT INTO cost_records (agent_id, model, provider, input_tokens, output_tokens, input_cost, output_cost, total_cost, priced, requested_model, created_at)
-        VALUES (${record.agentId}, ${record.model}, ${record.provider}, ${record.inputTokens}, ${record.outputTokens}, ${record.inputCost}, ${record.outputCost}, ${record.totalCost}, ${record.priced}, ${record.requestedModel ?? null}, ${new Date(record.timestamp)})
-      `;
+      await this.store.insertCostRecord(record);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       govynEvents.emit('event', {
@@ -74,10 +62,7 @@ export class DbWriter {
    */
   async writePolicyEvaluation(evalRecord: PolicyEvaluationRecord): Promise<void> {
     try {
-      await this.sql`
-        INSERT INTO policy_evaluations (agent_id, provider, path, allowed, evaluated_count, matched_count, denied_by, denied_reason, evaluation_time_ms)
-        VALUES (${evalRecord.agentId}, ${evalRecord.provider}, ${evalRecord.path}, ${evalRecord.allowed}, ${evalRecord.evaluatedCount}, ${evalRecord.matchedCount}, ${evalRecord.deniedBy ?? null}, ${evalRecord.deniedReason ?? null}, ${evalRecord.evaluationTimeMs ?? null})
-      `;
+      await this.store.insertPolicyEvaluation(evalRecord);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       govynEvents.emit('event', {
@@ -107,11 +92,7 @@ export class DbWriter {
     notes?: string;
   }): Promise<void> {
     try {
-      // Log the approval event as a policy evaluation with special marker
-      await this.sql`
-        INSERT INTO policy_evaluations (agent_id, provider, path, allowed, evaluated_count, matched_count, denied_by, denied_reason, evaluation_time_ms)
-        VALUES (${'approval:' + event.requestId}, ${'approval'}, ${event.action}, ${event.action === 'approved' || event.action === 'token_consumed'}, ${0}, ${0}, ${event.decidedBy ?? null}, ${event.notes ?? null}, ${null})
-      `;
+      await this.store.insertApprovalEvent(event);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       govynEvents.emit('event', {
@@ -136,7 +117,7 @@ export class DbWriter {
    */
   async isAvailable(): Promise<boolean> {
     try {
-      await this.sql`SELECT 1`;
+      await this.store.ping();
       return true;
     } catch {
       return false;

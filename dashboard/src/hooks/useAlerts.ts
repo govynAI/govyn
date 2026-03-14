@@ -17,6 +17,8 @@ interface UseAlertsResult {
   rules: AlertRule[];
   loading: boolean;
   error: string | null;
+  available: boolean;
+  unavailableReason: string | null;
   refetch: () => void;
   createRule: (payload: AlertRuleCreatePayload) => Promise<void>;
   updateRule: (id: string, updates: Partial<AlertRuleCreatePayload & { enabled: boolean }>) => Promise<void>;
@@ -36,6 +38,8 @@ export function useAlerts(): UseAlertsResult {
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [available, setAvailable] = useState(true);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
 
   const fetchRules = useCallback(async () => {
     if (!isConnected) return;
@@ -52,6 +56,12 @@ export function useAlerts(): UseAlertsResult {
 
       const json = (await response.json()) as AlertRulesApiResponse;
       setRules(json.rules);
+      setAvailable(json.available ?? true);
+      setUnavailableReason(
+        json.available === false
+          ? json.reason ?? "Alerts are unavailable on this proxy."
+          : null,
+      );
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unknown error fetching alert rules";
@@ -177,6 +187,8 @@ export function useAlerts(): UseAlertsResult {
     rules,
     loading,
     error,
+    available,
+    unavailableReason,
     refetch: fetchRules,
     createRule,
     updateRule,

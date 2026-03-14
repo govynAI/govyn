@@ -6,7 +6,7 @@ version: 1
 
 proxy:
   port: 4000
-  host: 0.0.0.0
+  host: 127.0.0.1                       # Local-only default. For remote exposure, change this to 0.0.0.0 and add your own agent API keys.
 
 providers:
   openai:
@@ -19,21 +19,30 @@ providers:
 
 agents:
   frontend-agent:
-    api_keys: []
+    # Add your own generated api_keys only if you expose the proxy off-machine.
+    # api_keys:
+    #   - gvn_generate_your_own_frontend_secret_here
     loop_detection:
       threshold: 5                        # Stricter loop detection for UI agents
       window_seconds: 30
       cooldown_seconds: 120
 
   backend-agent:
-    api_keys: []
+    # api_keys:
+    #   - gvn_generate_your_own_backend_secret_here
     loop_detection:
       threshold: 15                       # More lenient for batch processing
       window_seconds: 60
       cooldown_seconds: 300
 
   debug-agent:
-    api_keys: []
+    # api_keys:
+    #   - gvn_generate_your_own_debug_secret_here
+
+database:
+  url: sqlite:./govyn.db                # Default single-host persistence.
+  # For a shared team deployment or multiple Govyn instances, switch to PostgreSQL:
+  # url: postgres://govyn:change-me@db.example.com:5432/govyn
 
 budgets:
   frontend-agent:
@@ -53,6 +62,12 @@ budgets:
     monthly_limit: 20.00
     limit_type: hard
     soft_warning_percent: 90
+
+security:
+  # Only needed for remote dashboard or admin API access.
+  # admin_api_key_env: GOVYN_ADMIN_API_KEY
+  # trusted_origins:
+  #   - https://dashboard.example.com
 
 logging:
   enabled: true

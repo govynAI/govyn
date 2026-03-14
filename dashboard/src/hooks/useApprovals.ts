@@ -8,6 +8,8 @@ interface UseApprovalsResult {
   total: number;
   loading: boolean;
   error: string | null;
+  available: boolean;
+  unavailableReason: string | null;
   refetch: () => void;
 }
 
@@ -27,6 +29,8 @@ export function useApprovals(
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [available, setAvailable] = useState(true);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
   const refreshMs = options?.autoRefreshMs ?? 10_000;
 
   // Track latest statusFilter in a ref so the interval callback
@@ -58,6 +62,12 @@ export function useApprovals(
       const json = (await response.json()) as ApprovalsApiResponse;
       setApprovals(json.approvals);
       setTotal(json.total);
+      setAvailable(json.available ?? true);
+      setUnavailableReason(
+        json.available === false
+          ? json.reason ?? "Approvals are unavailable on this proxy."
+          : null,
+      );
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unknown error fetching approvals";
@@ -86,5 +96,13 @@ export function useApprovals(
     return () => clearInterval(interval);
   }, [isConnected, statusFilter, refreshMs, fetchApprovals]);
 
-  return { approvals, total, loading, error, refetch: fetchApprovals };
+  return {
+    approvals,
+    total,
+    loading,
+    error,
+    available,
+    unavailableReason,
+    refetch: fetchApprovals,
+  };
 }

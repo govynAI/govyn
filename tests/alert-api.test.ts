@@ -7,33 +7,32 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as http from 'node:http';
+const { deliverWebhookJsonMock, resolveWebhookTargetMock } = vi.hoisted(() => ({
+  deliverWebhookJsonMock: vi.fn(),
+  resolveWebhookTargetMock: vi.fn(),
+}));
+vi.mock('../src/security.js', () => ({
+  deliverWebhookJson: deliverWebhookJsonMock,
+  resolveWebhookTarget: resolveWebhookTargetMock,
+}));
 import { handleAlertApi } from '../src/alert-api.js';
 import type { AlertManager } from '../src/alert-manager.js';
 
-// ---- Test helpers ----
-
-/** Create a mock IncomingMessage */
 function mockRequest(method: string, url: string, body?: string): http.IncomingMessage {
-  const req = new http.IncomingMessage(null as any);
+  const req = new http.IncomingMessage(null as never);
   req.method = method;
   req.url = url;
 
-  // Simulate body data emission
-  if (body !== undefined) {
-    process.nextTick(() => {
+  process.nextTick(() => {
+    if (body !== undefined) {
       req.emit('data', Buffer.from(body, 'utf8'));
-      req.emit('end');
-    });
-  } else {
-    process.nextTick(() => {
-      req.emit('end');
-    });
-  }
+    }
+    req.emit('end');
+  });
 
   return req;
 }
 
-/** Create a mock ServerResponse that captures writes */
 function mockResponse(): http.ServerResponse & {
   _statusCode: number;
   _headers: Record<string, string>;
@@ -72,7 +71,6 @@ function mockResponse(): http.ServerResponse & {
   return res;
 }
 
-/** Wait for response to end */
 function waitForResponse(res: ReturnType<typeof mockResponse>): Promise<void> {
   return new Promise<void>((resolve) => {
     const check = () => {
@@ -86,16 +84,13 @@ function waitForResponse(res: ReturnType<typeof mockResponse>): Promise<void> {
   });
 }
 
-/** Create a mock sql object */
-function mockSql() {
-  const sqlFn = vi.fn().mockResolvedValue([]) as any;
-  sqlFn.unsafe = vi.fn().mockResolvedValue([]);
-  return sqlFn;
-}
-
-/** Create a mock AlertManager */
 function mockAlertManager(): AlertManager {
   return {
+    listRules: vi.fn().mockResolvedValue([]),
+    createRule: vi.fn(),
+    updateRule: vi.fn(),
+    deleteRule: vi.fn(),
+    listHistory: vi.fn().mockResolvedValue({ alerts: [], total: 0, limit: 50, offset: 0 }),
     reloadRules: vi.fn().mockResolvedValue(undefined),
     start: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn(),
@@ -106,53 +101,49 @@ function mockAlertManager(): AlertManager {
   } as any;
 }
 
-// ---- Tests ----
-
 describe('handleAlertApi', () => {
-  let sql: ReturnType<typeof mockSql>;
   let alertManager: AlertManager;
-  let fetchSpy: ReturnType<typeof vi.fn>;
-  let originalFetch: typeof globalThis.fetch;
 
   beforeEach(() => {
-    sql = mockSql();
     alertManager = mockAlertManager();
-    originalFetch = globalThis.fetch;
-    fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-    globalThis.fetch = fetchSpy;
+    resolveWebhookTargetMock.mockResolvedValue({
+      ok: true,
+      target: {
+        normalizedUrl: 'https://hooks.example.com/test',
+      },
+    });
+    deliverWebhookJsonMock.mockResolvedValue({ status: 200 });
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    vi.clearAllMocks();
   });
 
   describe('GET /api/alerts/rules', () => {
     it('returns list of all alert rules', async () => {
-      const rules = [
+      (alertManager.listRules as any).mockResolvedValueOnce([
         {
           id: 'rule-1',
           name: 'Budget Alert',
           type: 'budget_threshold',
           enabled: true,
           config: { agent_id: '*', metric: 'daily', threshold_percent: 80 },
-          webhook_url: 'https://hooks.example.com/budget',
-          cooldown_minutes: 60,
-          last_fired_at: null,
-          created_at: new Date('2026-02-28T10:00:00Z'),
-          updated_at: new Date('2026-02-28T10:00:00Z'),
+          webhookUrl: 'https://hooks.example.com/budget',
+          cooldownMinutes: 60,
+          lastFiredAt: null,
+          createdAt: new Date('2026-02-28T10:00:00Z'),
+          updatedAt: new Date('2026-02-28T10:00:00Z'),
         },
-      ];
-      sql.mockResolvedValueOnce(rules);
+      ]);
 
       const req = mockRequest('GET', '/api/alerts/rules');
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(200);
       const body = JSON.parse(res._body);
-      expect(body.rules).toBeDefined();
       expect(body.rules).toHaveLength(1);
       expect(body.rules[0].name).toBe('Budget Alert');
     });
@@ -160,19 +151,18 @@ describe('handleAlertApi', () => {
 
   describe('POST /api/alerts/rules', () => {
     it('creates a new alert rule with valid body (201)', async () => {
-      const created = [{
+      (alertManager.createRule as any).mockResolvedValueOnce({
         id: 'new-rule-id',
         name: 'Test Rule',
         type: 'budget_threshold',
         enabled: true,
         config: { agent_id: '*', metric: 'daily', threshold_percent: 80 },
-        webhook_url: 'https://hooks.example.com/test',
-        cooldown_minutes: 60,
-        last_fired_at: null,
-        created_at: new Date('2026-02-28T10:00:00Z'),
-        updated_at: new Date('2026-02-28T10:00:00Z'),
-      }];
-      sql.mockResolvedValueOnce(created);
+        webhookUrl: 'https://hooks.example.com/test',
+        cooldownMinutes: 60,
+        lastFiredAt: null,
+        createdAt: new Date('2026-02-28T10:00:00Z'),
+        updatedAt: new Date('2026-02-28T10:00:00Z'),
+      });
 
       const req = mockRequest('POST', '/api/alerts/rules', JSON.stringify({
         name: 'Test Rule',
@@ -182,14 +172,13 @@ describe('handleAlertApi', () => {
       }));
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(201);
       const body = JSON.parse(res._body);
-      expect(body.rule).toBeDefined();
       expect(body.rule.id).toBe('new-rule-id');
-      expect((alertManager.reloadRules as any)).toHaveBeenCalled();
+      expect((alertManager.createRule as any)).toHaveBeenCalled();
     });
 
     it('returns 400 for invalid rule type', async () => {
@@ -201,20 +190,17 @@ describe('handleAlertApi', () => {
       }));
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(400);
     });
 
     it('returns 400 for missing required fields', async () => {
-      const req = mockRequest('POST', '/api/alerts/rules', JSON.stringify({
-        name: 'Test Rule',
-        // missing type, config, webhook_url
-      }));
+      const req = mockRequest('POST', '/api/alerts/rules', JSON.stringify({ name: 'Test Rule' }));
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(400);
@@ -225,32 +211,51 @@ describe('handleAlertApi', () => {
         name: 'Test Rule',
         type: 'budget_threshold',
         config: { agent_id: '*', metric: 'daily', threshold_percent: 80 },
-        // missing webhook_url
       }));
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(400);
+    });
+
+    it('returns 400 for private or loopback webhook targets', async () => {
+      resolveWebhookTargetMock.mockResolvedValueOnce({
+        ok: false,
+        error: 'Invalid webhook_url: private, loopback, or local-network destinations are not allowed',
+      });
+
+      const req = mockRequest('POST', '/api/alerts/rules', JSON.stringify({
+        name: 'Unsafe Rule',
+        type: 'budget_threshold',
+        config: { agent_id: '*', metric: 'daily', threshold_percent: 80 },
+        webhook_url: 'http://127.0.0.1:9000/hook',
+      }));
+      const res = mockResponse();
+
+      handleAlertApi(req, res, alertManager);
+      await waitForResponse(res);
+
+      expect(res._statusCode).toBe(400);
+      expect(deliverWebhookJsonMock).not.toHaveBeenCalled();
     });
   });
 
   describe('PUT /api/alerts/rules/:id', () => {
     it('updates an existing rule', async () => {
-      const updated = [{
+      (alertManager.updateRule as any).mockResolvedValueOnce({
         id: 'rule-1',
         name: 'Updated Rule',
         type: 'budget_threshold',
         enabled: false,
         config: { agent_id: '*', metric: 'daily', threshold_percent: 90 },
-        webhook_url: 'https://hooks.example.com/updated',
-        cooldown_minutes: 30,
-        last_fired_at: null,
-        created_at: new Date('2026-02-28T10:00:00Z'),
-        updated_at: new Date('2026-02-28T11:00:00Z'),
-      }];
-      sql.unsafe.mockResolvedValueOnce(updated);
+        webhookUrl: 'https://hooks.example.com/updated',
+        cooldownMinutes: 30,
+        lastFiredAt: null,
+        createdAt: new Date('2026-02-28T10:00:00Z'),
+        updatedAt: new Date('2026-02-28T11:00:00Z'),
+      });
 
       const req = mockRequest('PUT', '/api/alerts/rules/rule-1', JSON.stringify({
         name: 'Updated Rule',
@@ -258,25 +263,31 @@ describe('handleAlertApi', () => {
       }));
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(200);
       const body = JSON.parse(res._body);
-      expect(body.rule).toBeDefined();
       expect(body.rule.name).toBe('Updated Rule');
-      expect((alertManager.reloadRules as any)).toHaveBeenCalled();
+      expect((alertManager.updateRule as any)).toHaveBeenCalledWith({
+        id: 'rule-1',
+        name: 'Updated Rule',
+        enabled: false,
+        config: undefined,
+        webhookUrl: undefined,
+        cooldownMinutes: undefined,
+      });
     });
 
     it('returns 404 for non-existent rule', async () => {
-      sql.unsafe.mockResolvedValueOnce([]);
+      (alertManager.updateRule as any).mockResolvedValueOnce(null);
 
       const req = mockRequest('PUT', '/api/alerts/rules/non-existent', JSON.stringify({
         name: 'Updated Rule',
       }));
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(404);
@@ -285,27 +296,27 @@ describe('handleAlertApi', () => {
 
   describe('DELETE /api/alerts/rules/:id', () => {
     it('deletes a rule', async () => {
-      sql.mockResolvedValueOnce([{ id: 'rule-1' }]);
+      (alertManager.deleteRule as any).mockResolvedValueOnce(true);
 
       const req = mockRequest('DELETE', '/api/alerts/rules/rule-1');
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(200);
       const body = JSON.parse(res._body);
       expect(body.success).toBe(true);
-      expect((alertManager.reloadRules as any)).toHaveBeenCalled();
+      expect((alertManager.deleteRule as any)).toHaveBeenCalledWith('rule-1');
     });
 
     it('returns 404 for non-existent rule', async () => {
-      sql.mockResolvedValueOnce([]);
+      (alertManager.deleteRule as any).mockResolvedValueOnce(false);
 
       const req = mockRequest('DELETE', '/api/alerts/rules/non-existent');
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(404);
@@ -314,57 +325,55 @@ describe('handleAlertApi', () => {
 
   describe('GET /api/alerts/history', () => {
     it('returns paginated alert history', async () => {
-      const countResult = [{ total: 1 }];
-      const historyRows = [{
-        id: 'hist-1',
-        rule_id: 'rule-1',
-        rule_name: 'Budget Alert',
-        rule_type: 'budget_threshold',
-        event_type: 'budget_warning',
-        event_payload: { type: 'budget_warning' },
-        webhook_url: 'https://hooks.example.com/budget',
-        webhook_status: 200,
-        webhook_error: null,
-        fired_at: new Date('2026-02-28T10:00:00Z'),
-      }];
-
-      sql.unsafe
-        .mockResolvedValueOnce(countResult)
-        .mockResolvedValueOnce(historyRows);
+      (alertManager.listHistory as any).mockResolvedValueOnce({
+        alerts: [
+          {
+            id: 'hist-1',
+            rule_id: 'rule-1',
+            rule_name: 'Budget Alert',
+            rule_type: 'budget_threshold',
+            event_type: 'budget_warning',
+            event_payload: { type: 'budget_warning' },
+            webhook_url: 'https://hooks.example.com/budget',
+            webhook_status: 200,
+            webhook_error: null,
+            fired_at: '2026-02-28T10:00:00.000Z',
+          },
+        ],
+        total: 1,
+        limit: 50,
+        offset: 0,
+      });
 
       const req = mockRequest('GET', '/api/alerts/history');
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(200);
       const body = JSON.parse(res._body);
-      expect(body.alerts).toBeDefined();
       expect(body.total).toBe(1);
       expect(body.limit).toBe(50);
       expect(body.offset).toBe(0);
     });
 
     it('filters by rule_id', async () => {
-      sql.unsafe
-        .mockResolvedValueOnce([{ total: 0 }])
-        .mockResolvedValueOnce([]);
+      (alertManager.listHistory as any).mockResolvedValueOnce({
+        alerts: [],
+        total: 0,
+        limit: 50,
+        offset: 0,
+      });
 
       const req = mockRequest('GET', '/api/alerts/history?rule_id=rule-1');
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(200);
-
-      // Verify sql.unsafe was called with rule_id filter
-      const calls = sql.unsafe.mock.calls;
-      expect(calls.length).toBeGreaterThanOrEqual(1);
-      // The WHERE clause should reference rule_id
-      const countQuery = calls[0][0] as string;
-      expect(countQuery).toContain('rule_id');
+      expect((alertManager.listHistory as any)).toHaveBeenCalledWith(50, 0, 'rule-1');
     });
   });
 
@@ -375,34 +384,50 @@ describe('handleAlertApi', () => {
       }));
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(200);
       const body = JSON.parse(res._body);
       expect(body.success).toBe(true);
       expect(body.status).toBe(200);
-
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      const [url] = fetchSpy.mock.calls[0];
-      expect(url).toBe('https://hooks.example.com/test');
+      expect(resolveWebhookTargetMock).toHaveBeenCalledWith('https://hooks.example.com/test');
+      expect(deliverWebhookJsonMock).toHaveBeenCalledOnce();
     });
 
     it('returns failure when webhook delivery fails', async () => {
-      fetchSpy.mockRejectedValueOnce(new Error('Connection refused'));
+      deliverWebhookJsonMock.mockRejectedValueOnce(new Error('Connection refused'));
 
       const req = mockRequest('POST', '/api/alerts/test', JSON.stringify({
         webhook_url: 'https://hooks.example.com/failing',
       }));
       const res = mockResponse();
 
-      handleAlertApi(req, res, sql, alertManager);
+      handleAlertApi(req, res, alertManager);
       await waitForResponse(res);
 
       expect(res._statusCode).toBe(200);
       const body = JSON.parse(res._body);
       expect(body.success).toBe(false);
       expect(body.error).toBeDefined();
+    });
+
+    it('rejects private test webhook targets', async () => {
+      resolveWebhookTargetMock.mockResolvedValueOnce({
+        ok: false,
+        error: 'Invalid webhook_url: private, loopback, or local-network destinations are not allowed',
+      });
+
+      const req = mockRequest('POST', '/api/alerts/test', JSON.stringify({
+        webhook_url: 'http://localhost:9000/hook',
+      }));
+      const res = mockResponse();
+
+      handleAlertApi(req, res, alertManager);
+      await waitForResponse(res);
+
+      expect(res._statusCode).toBe(400);
+      expect(deliverWebhookJsonMock).not.toHaveBeenCalled();
     });
   });
 });

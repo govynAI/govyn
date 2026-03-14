@@ -11,6 +11,16 @@
 
 import * as crypto from 'node:crypto';
 import type postgres from 'postgres';
+import type { ApprovalStore } from './persistence-types.js';
+import { adaptApprovalStore } from './persistence.js';
+
+export function hashApprovalRequest(body: string | Buffer | undefined): string {
+  const data = Buffer.isBuffer(body)
+    ? body
+    : Buffer.from(body ?? '', 'utf8');
+
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
 
 /**
  * Generate a truncated summary of a request body for approval metadata.
@@ -46,7 +56,11 @@ export function generateRequestSummary(body: string | undefined, maxLength = 500
 }
 
 export class ApprovalManager {
-  constructor(private sql: postgres.Sql) {}
+  private readonly store: ApprovalStore;
+
+  constructor(storeOrSql: ApprovalStore | postgres.Sql) {
+    this.store = adaptApprovalStore(storeOrSql);
+  }
 
   /**
    * Create a new approval request in the database.
@@ -61,28 +75,11 @@ export class ApprovalManager {
     policyRule?: string;
     estimatedCost?: number;
     requestSummary: string;
+    requestHash: string;
     requestPayload?: unknown;
     timeoutSeconds: number;
   }): Promise<{ id: string; pollingUrl: string; expiresAt: string }> {
-    const expiresAt = new Date(Date.now() + params.timeoutSeconds * 1000);
-    const [row] = await this.sql`
-      INSERT INTO approval_requests (
-        agent_id, provider, model, target_path, policy_name, policy_rule,
-        estimated_cost, request_summary, request_payload,
-        timeout_seconds, expires_at
-      ) VALUES (
-        ${params.agentId}, ${params.provider}, ${params.model ?? null},
-        ${params.targetPath}, ${params.policyName}, ${params.policyRule ?? null},
-        ${params.estimatedCost ?? null}, ${params.requestSummary},
-        ${params.requestPayload ? JSON.stringify(params.requestPayload) : null},
-        ${params.timeoutSeconds}, ${expiresAt}
-      ) RETURNING id, expires_at
-    `;
-    return {
-      id: row.id,
-      pollingUrl: `/api/approvals/${row.id}`,
-      expiresAt: row.expires_at.toISOString(),
-    };
+    return this.store.createApprovalRequest(params);
   }
 
   /**
@@ -96,19 +93,7 @@ export class ApprovalManager {
     decidedAt?: string;
     expiresAt: string;
   } | null> {
-    const [row] = await this.sql`
-      SELECT id, status, approval_token, decided_at, expires_at
-      FROM approval_requests
-      WHERE id = ${id}
-    `;
-    if (!row) return null;
-    return {
-      id: row.id,
-      status: row.status,
-      approvalToken: row.status === 'approved' ? row.approval_token : undefined,
-      decidedAt: row.decided_at?.toISOString(),
-      expiresAt: row.expires_at.toISOString(),
-    };
+    return this.store.getApprovalStatus(id);
   }
 
   /**
@@ -116,25 +101,11 @@ export class ApprovalManager {
    * Atomically finds the token and marks it as used in one query.
    * Returns the original request context if valid, null if invalid/expired/used.
    */
-  async validateAndConsumeToken(token: string): Promise<{
-    agentId: string;
-    policyName: string;
-    targetPath: string;
-  } | null> {
-    const [row] = await this.sql`
-      UPDATE approval_requests
-      SET token_used = true
-      WHERE approval_token = ${token}
-        AND status = 'approved'
-        AND token_used = false
-      RETURNING agent_id, policy_name, target_path
-    `;
-    if (!row) return null;
-    return {
-      agentId: row.agent_id,
-      policyName: row.policy_name,
-      targetPath: row.target_path,
-    };
+  async validateAndConsumeToken(
+    token: string,
+    expected: { agentId: string; targetPath: string; requestHash: string },
+  ): Promise<{ policyName: string } | null> {
+    return this.store.validateAndConsumeToken(token, expected);
   }
 
   /**
@@ -142,17 +113,7 @@ export class ApprovalManager {
    * Returns true if the request was pending and is now approved.
    */
   async approveRequest(id: string, decidedBy: string, notes?: string): Promise<boolean> {
-    const approvalToken = crypto.randomUUID();
-    const result = await this.sql`
-      UPDATE approval_requests
-      SET status = 'approved',
-          decided_by = ${decidedBy},
-          decision_notes = ${notes ?? null},
-          decided_at = NOW(),
-          approval_token = ${approvalToken}
-      WHERE id = ${id} AND status = 'pending'
-    `;
-    return result.count > 0;
+    return this.store.approveRequest(id, decidedBy, notes);
   }
 
   /**
@@ -160,14 +121,19 @@ export class ApprovalManager {
    * Returns true if the request was pending and is now denied.
    */
   async denyRequest(id: string, decidedBy: string, notes?: string): Promise<boolean> {
-    const result = await this.sql`
-      UPDATE approval_requests
-      SET status = 'denied',
-          decided_by = ${decidedBy},
-          decision_notes = ${notes ?? null},
-          decided_at = NOW()
-      WHERE id = ${id} AND status = 'pending'
-    `;
-    return result.count > 0;
+    return this.store.denyRequest(id, decidedBy, notes);
+  }
+
+  async listApprovals(
+    statusFilters: string[],
+    limit: number,
+    offset: number,
+    agentId: string | null,
+  ) {
+    return this.store.listApprovals(statusFilters, limit, offset, agentId);
+  }
+
+  async expireTimedOutApprovals(now?: Date): Promise<number> {
+    return this.store.expireTimedOutApprovals(now);
   }
 }

@@ -8,8 +8,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { ProxyConfig, ProviderConfig, AgentConfig, BudgetConfig, LoopDetectionConfig, LoggingConfig, LoggingMode, DatabaseConfig } from './types.js';
+import type { ProxyConfig, ProviderConfig, AgentConfig, BudgetConfig, LoopDetectionConfig, LoggingConfig, LoggingMode, DatabaseConfig, SecurityConfig } from './types.js';
 import { loadPricing } from './pricing.js';
+import { DEFAULT_AUTH_FILE, DEFAULT_SESSION_TTL_HOURS } from './auth.js';
+import { defaultDatabaseUrl, resolveDatabaseUrl } from './database-url.js';
+import { DEFAULT_POLICIES_FILE } from './policy-file.js';
+import { DEFAULT_ADMIN_API_KEY_ENV, isLoopbackHost, normalizeOrigin } from './security.js';
 
 /**
  * Raw shape of the YAML file on disk.
@@ -47,6 +51,14 @@ interface RawConfig {
     retention_days?: number;
     approval_retention_days?: number;
   };
+  security?: {
+    admin_api_key_env?: string;
+    trusted_origins?: string[];
+    allow_local_admin?: boolean;
+    require_agent_api_key?: boolean;
+    auth_file?: string;
+    session_ttl_hours?: number;
+  };
   logging?: {
     enabled?: boolean;
     directory?: string;
@@ -61,6 +73,17 @@ interface RawConfig {
     agent_modes?: Record<string, string>;
     storage_region?: string;
   };
+}
+
+function resolveConfigRelativePath(
+  value: string,
+  configPath: string,
+): string {
+  if (path.isAbsolute(value)) {
+    return value;
+  }
+
+  return path.resolve(path.dirname(configPath), value);
 }
 
 /**
@@ -241,34 +264,103 @@ export function loadConfig(filePath?: string): ProxyConfig {
     };
   }
 
-  // Parse database section (optional — no DB persistence if missing)
-  let database: DatabaseConfig | undefined;
-  const dbUrl = process.env['GOVYN_DATABASE_URL'] ?? cfg.database?.url;
-  if (dbUrl && typeof dbUrl === 'string' && dbUrl.length > 0) {
-    database = {
-      url: dbUrl,
-      failOpen: cfg.database?.fail_open ?? true,
-      retentionDays: cfg.database?.retention_days ?? 90,
-      approvalRetentionDays: cfg.database?.approval_retention_days ?? 365,
-    };
-  }
+  // Parse database section. Govyn defaults to local SQLite so approvals and alerts
+  // work out of the box on self-hosted single-node installs.
+  const configuredDbUrl = process.env['GOVYN_DATABASE_URL'] ?? cfg.database?.url;
+  const resolvedDbUrl = configuredDbUrl && typeof configuredDbUrl === 'string' && configuredDbUrl.trim().length > 0
+    ? resolveDatabaseUrl(configuredDbUrl, absolutePath)
+    : defaultDatabaseUrl(absolutePath);
+  const database: DatabaseConfig = {
+    url: resolvedDbUrl,
+    failOpen: cfg.database?.fail_open ?? true,
+    retentionDays: cfg.database?.retention_days ?? 90,
+    approvalRetentionDays: cfg.database?.approval_retention_days ?? 365,
+  };
 
-  // Parse policies_file (optional path to policy YAML)
-  const policiesFile = typeof cfg.policies_file === 'string' ? cfg.policies_file : undefined;
-  if (policiesFile) {
-    console.log(`[govyn] Policy file configured: ${policiesFile}`);
+  // Parse policies_file (defaults to a local policies.yaml next to the config file)
+  const configuredPoliciesFile = typeof cfg.policies_file === 'string' && cfg.policies_file.trim().length > 0
+    ? cfg.policies_file.trim()
+    : undefined;
+  const policiesFile = resolveConfigRelativePath(
+    configuredPoliciesFile ?? DEFAULT_POLICIES_FILE,
+    absolutePath,
+  );
+  console.log(
+    configuredPoliciesFile
+      ? `[govyn] Policy file configured: ${policiesFile}`
+      : `[govyn] Policy file defaulting to ${policiesFile}`,
+  );
+
+  const proxyHost = cfg.proxy.host ?? '127.0.0.1';
+  const defaultRequireAgentApiKey = !isLoopbackHost(proxyHost);
+
+  // Parse security section
+  let security: SecurityConfig | undefined;
+  if (cfg.security) {
+    const rawOrigins = cfg.security.trusted_origins ?? [];
+    if (!Array.isArray(rawOrigins)) {
+      throw new Error(`Invalid config at ${absolutePath}: security.trusted_origins must be an array`);
+    }
+
+    if (
+      cfg.security.session_ttl_hours !== undefined
+      && (
+        typeof cfg.security.session_ttl_hours !== 'number'
+        || !Number.isFinite(cfg.security.session_ttl_hours)
+        || cfg.security.session_ttl_hours <= 0
+        || cfg.security.session_ttl_hours > 24 * 365
+      )
+    ) {
+      throw new Error(`Invalid config at ${absolutePath}: security.session_ttl_hours must be a positive number of hours no greater than 8760`);
+    }
+
+    const allowedOrigins = rawOrigins.map((origin, index) => {
+      if (typeof origin !== 'string') {
+        throw new Error(`Invalid config at ${absolutePath}: security.trusted_origins[${index}] must be a string`);
+      }
+
+      const normalized = normalizeOrigin(origin);
+      if (!normalized) {
+        throw new Error(`Invalid config at ${absolutePath}: security.trusted_origins[${index}] must be an http(s) origin without a path`);
+      }
+
+      return normalized;
+    });
+
+    const configuredAuthFile = cfg.security.auth_file?.trim();
+
+    security = {
+      adminApiKeyEnv: cfg.security.admin_api_key_env?.trim() || DEFAULT_ADMIN_API_KEY_ENV,
+      allowedOrigins,
+      allowLocalAdmin: cfg.security.allow_local_admin ?? true,
+      requireAgentApiKey: cfg.security.require_agent_api_key ?? defaultRequireAgentApiKey,
+      authFile: configuredAuthFile
+        ? resolveConfigRelativePath(configuredAuthFile, absolutePath)
+        : resolveConfigRelativePath(process.env['GOVYN_AUTH_FILE']?.trim() || DEFAULT_AUTH_FILE, absolutePath),
+      sessionTtlHours: cfg.security.session_ttl_hours ?? DEFAULT_SESSION_TTL_HOURS,
+    };
+  } else {
+    security = {
+      adminApiKeyEnv: DEFAULT_ADMIN_API_KEY_ENV,
+      allowedOrigins: [],
+      allowLocalAdmin: true,
+      requireAgentApiKey: defaultRequireAgentApiKey,
+      authFile: resolveConfigRelativePath(process.env['GOVYN_AUTH_FILE']?.trim() || DEFAULT_AUTH_FILE, absolutePath),
+      sessionTtlHours: DEFAULT_SESSION_TTL_HOURS,
+    };
   }
 
   const config: ProxyConfig = {
     port: cfg.proxy.port,
-    host: cfg.proxy.host ?? '0.0.0.0',
+    host: proxyHost,
     providers,
     agents,
     pricing,
     budgets,
+    policiesFile,
     ...(logging ? { logging } : {}),
-    ...(policiesFile ? { policiesFile } : {}),
-    ...(database ? { database } : {}),
+    database,
+    ...(security ? { security } : {}),
   };
 
   console.log(`[govyn] Loaded config from ${absolutePath}`);

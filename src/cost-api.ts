@@ -5,6 +5,8 @@
  * in-memory CostAggregator. Supports query parameters for filtering:
  *   ?agent=<agentId>   — filter to a specific agent
  *   ?period=<period>   — 'hour', 'day'/'today', 'week', 'month', 'all' (default: 'all')
+ *
+ * Also serves GET /api/costs/timeseries for chart-ready bucketed spend history.
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -74,6 +76,32 @@ export function handleCostApi(
     default:
       period = 'all';
       break;
+  }
+
+  if (parsedUrl.pathname === '/api/costs/timeseries') {
+    const timeseries = aggregator.getTimeSeries({ agentId: agentParam, period });
+    const body = JSON.stringify({
+      period,
+      bucket: timeseries.bucket,
+      generated_at: new Date().toISOString(),
+      points: timeseries.points,
+    });
+    res.writeHead(200, {
+      'content-type': 'application/json',
+      'content-length': Buffer.byteLength(body).toString(),
+    });
+    res.end(body);
+    return;
+  }
+
+  if (parsedUrl.pathname !== '/api/costs') {
+    const body = JSON.stringify({ error: { message: 'Not found', code: 'not_found' } });
+    res.writeHead(404, {
+      'content-type': 'application/json',
+      'content-length': Buffer.byteLength(body).toString(),
+    });
+    res.end(body);
+    return;
   }
 
   // Query the aggregator

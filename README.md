@@ -27,6 +27,7 @@ Govyn is a wall. There are no other doors.
 - **Policy engine** — YAML-based rules: rate limits, model restrictions, require-approval gates, and custom policies
 - **Action logging** — Every request logged with agent identity, cost, tokens, latency, and full context
 - **Multi-provider** — Route OpenAI and Anthropic traffic through a single proxy with per-provider API keys
+- **Locked-down management API** — Local-only by default, with optional admin API key and browser origin allowlist for remote dashboards
 - **Zero agent changes** — Agents just point at a different base URL. No SDK imports, no code changes
 - **Fail-open by default** — Proxy errors don't break your agents. Configurable to fail-closed for high-security deployments
 
@@ -45,7 +46,7 @@ Get from zero to a governed API call in under 5 minutes.
 npx govyn init
 ```
 
-The wizard walks you through provider selection, API key configuration, budget limits, and agent naming. It produces a `govyn.config.yaml` in the current directory.
+The wizard walks you through provider selection, API key configuration, budget limits, agent naming, and persistence. It produces a local `govyn.config.yaml` in the current directory, defaults `database.url` to `sqlite:./govyn.db`, and can also point at PostgreSQL if you already run one.
 
 ### Start the Proxy
 
@@ -66,6 +67,8 @@ Or with Docker Compose:
 ```bash
 docker-compose up
 ```
+
+For persistent self-hosting, mount a volume for your runtime files (`govyn.config.yaml`, `govyn.auth.json`, `govyn.db`, `policies.yaml`, and `logs/`) or point `database.url` at PostgreSQL instead of the default SQLite file.
 
 ### Verify
 
@@ -107,12 +110,21 @@ The wrapper automatically routes through your Govyn proxy, injects agent headers
 
 ## Configuration
 
-Govyn uses a `govyn.config.yaml` file. Run `npx govyn init` to generate one interactively, or create it manually:
+Govyn uses a local `govyn.config.yaml` runtime file. Run `npx govyn init` to generate one interactively in your working directory, or create one manually. The repo ships example templates under [`configs/`](./configs/); it does not ship a ready-to-use operator config.
+
+`govyn.config.yaml` is your deployment file. Keep it local to your environment and do not treat it as a shared repo sample.
+
+The OSS dashboard also uses a local `govyn.auth.json` file for its single admin account. Create it during `npx govyn init` or later with `npx govyn admin setup`. Keep that file local and out of git too.
+
+Govyn now uses SQLite by default for persistence. The default runtime database is `./govyn.db`, which powers approvals, alerts, cost history, and other durable operational data on a single host. Keep that file local and out of git too.
+
+For the smallest local-only starting point, use [`configs/openai-only.yaml`](./configs/openai-only.yaml) or generate one with `npx govyn init`. A minimal manual config looks like this:
 
 ```yaml
 version: 1
 proxy:
   port: 4000
+  host: 127.0.0.1
 
 providers:
   openai:
@@ -122,6 +134,12 @@ providers:
     base_url: https://api.anthropic.com
     api_key_env: ANTHROPIC_API_KEY
 
+agents:
+  research-agent: {}
+
+database:
+  url: sqlite:./govyn.db
+
 budgets:
   research-agent:
     daily_limit: 10.00
@@ -129,7 +147,49 @@ budgets:
     limit_type: hard
 ```
 
-See [`configs/`](./configs/) for more examples (single provider, multi-provider, team setups).
+If you omit `database.url`, Govyn still defaults to `sqlite:./govyn.db` beside your config. Keeping it explicit in your local config makes the deployment shape clearer.
+
+If you expose the proxy off-machine, add your own generated `agents.<name>.api_keys`. If you manage the proxy from a remote dashboard, create the local admin account on the host and add the dashboard origin under `security.trusted_origins`. Only set `security.admin_api_key_env` if you also want automation or break-glass API access.
+
+## Dashboard Auth
+
+- The OSS dashboard uses one local admin username/password account.
+- There is no Clerk, no email-based reset flow, no signup, and no OIDC/SAML in this repo.
+- Create the admin account with `npx govyn admin setup`, or let `npx govyn init` create it during first-run setup.
+- Reset the password locally with `npx govyn admin reset-password`.
+- Browser logins use an `HttpOnly` session cookie. `GOVYN_ADMIN_API_KEY` remains available for automation and break-glass recovery, not normal dashboard sign-in.
+
+## Persistence
+
+- Default OSS self-hosting: `database.url: sqlite:./govyn.db`
+- SQLite is the recommended default for one host, one admin, and the normal self-hosted OSS setup.
+- SQLite powers approvals, alerts, cost history, and other durable operational state without requiring a separate database service.
+- Switch to PostgreSQL by setting `database.url: postgres://...` when you need a shared database, managed backups, or multiple Govyn instances against the same backend.
+- The example configs under [`configs/`](./configs/) show the SQLite default and include commented PostgreSQL upgrade hints.
+
+See [`configs/openai-only.yaml`](./configs/openai-only.yaml) for the canonical minimal example, or browse [`configs/`](./configs/) for more setups (single provider, multi-provider, teams).
+
+## Security Defaults
+
+- Govyn does not ship any real agent keys, admin keys, or provider secrets. Every key shown in docs or UI is a placeholder or generated locally for the operator to adopt.
+- The proxy binds to `127.0.0.1` by default so a fresh install is local-only.
+- If you bind the proxy to a non-loopback host such as `0.0.0.0`, Govyn automatically requires `Authorization: Bearer <agent-api-key>` on proxied model requests. Configure those keys under `agents.<name>.api_keys`.
+- You can explicitly set `security.require_agent_api_key: false`, but that creates an unauthenticated spend surface and is unsafe on shared or public networks.
+- `/api/*` management endpoints are restricted to local requests by default.
+- Once the local dashboard admin exists, browser management uses the dashboard session cookie instead of a pasted API key.
+- To manage the proxy from another browser origin, add that origin under `security.trusted_origins` and sign in with the local admin username/password.
+- `GOVYN_ADMIN_API_KEY` (or another env var via `security.admin_api_key_env`) is for automation, CLI tooling, and break-glass remote API access via `X-Govyn-Admin-Key`.
+- Browser dashboards must be explicitly listed under `security.trusted_origins`. Localhost origins are allowed automatically for development.
+- Browser-origin management requests from untrusted origins are rejected even on localhost, which blocks CSRF-style admin actions against a developer machine.
+- `GET /api/approvals/:id` remains accessible without admin auth so the approval polling flow continues to work for agents.
+- Approval tokens are single-use and bound to the original approved agent, target path, and request body.
+- Alert webhooks reject loopback and private-network destinations, resolve DNS before connect, and block redirects to prevent SSRF against internal services.
+
+### Generating Agent Keys
+
+- Generate your own long random value for every agent. Do not reuse provider API keys as agent API keys.
+- The dashboard Settings page includes a browser-local generator and copy-ready YAML snippet. It helps you prepare local config only; it does not write proxy config, and the generated key is not sent to the proxy unless you manually add it to your config.
+- If you prefer the terminal, `node -e "console.log('gvn_' + require('node:crypto').randomBytes(32).toString('hex'))"` prints a suitable key.
 
 ## Policy Engine
 

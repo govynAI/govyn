@@ -76,7 +76,7 @@ jobs:
     environment:
       name: pypi
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: release-artifacts
@@ -89,7 +89,7 @@ jobs:
     needs: [build-release-artifacts, publish-pypi]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-artifacts
           path: release-artifacts

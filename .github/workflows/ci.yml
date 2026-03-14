@@ -139,7 +139,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - if: env.HAS_DOCKERHUB_USERNAME == 'true' && env.HAS_DOCKERHUB_TOKEN == 'true'
         name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           push: true
           tags: govyn/govyn:${{ github.ref_name }},govyn/govyn:latest

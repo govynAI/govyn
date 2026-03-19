@@ -46,21 +46,26 @@ jobs:
 
       - run: tar -czf release-artifacts/dashboard-dist-${{ github.ref_name }}.tar.gz -C dashboard dist
       - run: find release-artifacts -maxdepth 1 -type f ! -name 'sha256sums.txt' -print0 | xargs -0 sha256sum > release-artifacts/sha256sums.txt
-      - run: |
-          cat > release-artifacts/release-notes.md <<'EOF'
-          ## Highlights
+      - name: Generate release notes
+        run: |
+          TAG="${{ github.ref_name }}"
+          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s" "${PREV_TAG}..${TAG}" -- ':!.planning' | grep -v "^- Merge pull request")
+          else
+            CHANGELOG="- Initial release"
+          fi
+          cat > release-artifacts/release-notes.md <<EOF
+          ## Changes
 
-          - local single-admin dashboard auth for self-hosted OSS deployments
-          - SQLite as the default persistence backend, with PostgreSQL still supported
-          - tightened proxy, admin, approval, and webhook security posture
-          - improved dashboard UX, guide content, and release-time quality checks
+          ${CHANGELOG}
 
           ## Artifacts
 
-          - `govyn` npm package tarball
-          - `govynai` wheel and source distribution
+          - \`govyn\` npm package tarball
+          - \`govynai\` wheel and source distribution
           - packaged dashboard build
-          - `sha256sums.txt`
+          - \`sha256sums.txt\`
           EOF
 
       - uses: actions/upload-artifact@v7

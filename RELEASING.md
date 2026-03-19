@@ -42,10 +42,9 @@ That covers:
 
 Configure these before pushing a release tag:
 
-- `NPM_TOKEN`
-- `DOCKERHUB_USERNAME`
-- `DOCKERHUB_TOKEN`
+- npm trusted publishing for the `govyn` package, using the GitHub Actions environment named `npm`
 - PyPI trusted publishing for the `govynai` project, using the GitHub Actions environment named `pypi`
+- `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` for Docker image publishing
 
 ## Release Flow
 

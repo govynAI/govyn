@@ -49,7 +49,7 @@ class TestAllSymbols:
 class TestVersion:
     def test_version(self):
         import govynai
-        assert govynai.__version__ == "0.2.4"
+        assert govynai.__version__ == "0.2.5"
 
 
 class TestPyTyped:

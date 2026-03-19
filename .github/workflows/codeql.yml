@@ -22,7 +22,7 @@ jobs:
         language: [javascript-typescript, python]
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - if: matrix.language == 'javascript-typescript'
         uses: actions/setup-node@v6

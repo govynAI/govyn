@@ -1,6 +1,6 @@
 {
   "name": "govyn",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "AI agent governance proxy",
   "license": "MIT",
   "type": "module",

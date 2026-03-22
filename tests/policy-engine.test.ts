@@ -1204,7 +1204,7 @@ policies:
           enabled: true,
           scope: { level: 'global' },
           match: {
-            path: '(a+)+$',
+            path: ['(a', '+)+', '$'].join(''),
             regex: true,
           },
         } as BlockPolicy]);

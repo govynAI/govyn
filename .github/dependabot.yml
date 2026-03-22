@@ -3,8 +3,8 @@ updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 5
     groups:
       eslint:
         patterns:
@@ -18,12 +18,23 @@ updates:
       test:
         patterns:
           - "vitest"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+        exclude-patterns:
+          - "eslint*"
+          - "@eslint/*"
+          - "typescript-eslint"
+          - "typescript"
+          - "@types/*"
+          - "vitest"
 
   - package-ecosystem: "npm"
     directory: "/dashboard"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 5
     groups:
       radix-ui:
         patterns:
@@ -35,15 +46,24 @@ updates:
         patterns:
           - "vite"
           - "@vitejs/*"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+        exclude-patterns:
+          - "@radix-ui/*"
+          - "@codemirror/*"
+          - "vite"
+          - "@vitejs/*"
 
   - package-ecosystem: "pip"
     directory: "/python-sdk"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 5
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 5

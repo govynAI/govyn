@@ -414,7 +414,7 @@ describe('Template evaluation', () => {
       // Use a time during business hours so only PII filter triggers
       const tuesday10am = new Date('2026-02-24T10:00:00Z').getTime();
       const context = makeContext({
-        body: JSON.stringify({ content: 'SSN: 123-45-6789' }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'SSN: 123-45-6789' }] }),
       });
       const result = engine.evaluate(context, { now: tuesday10am });
       expect(result.allowed).toBe(false);

@@ -4,9 +4,36 @@ import * as httpRequest from 'node:http';
 import * as httpsRequest from 'node:https';
 import * as net from 'node:net';
 import type * as http from 'node:http';
+import ipaddr from 'ipaddr.js';
 import type { LocalAuthManager, AuthSession } from './auth.js';
 import { SESSION_COOKIE_NAME } from './auth.js';
 import type { SecurityConfig } from './types.js';
+
+/**
+ * IP ranges that must be blocked for SSRF protection.
+ * Covers IPv4 private/reserved and IPv6 equivalents including ULA, link-local,
+ * documentation ranges, and carrier-grade NAT.
+ */
+const BLOCKED_IP_RANGES: ReadonlySet<string> = new Set([
+  'loopback',
+  'uniqueLocal',
+  'linkLocal',
+  'private',
+  'carrierGradeNat',
+  'unspecified',
+  'reserved',
+]);
+
+/**
+ * Hostnames that resolve to cloud metadata services or other internal endpoints.
+ * These must be blocked regardless of what IP they resolve to.
+ */
+const BLOCKED_METADATA_HOSTNAMES: ReadonlySet<string> = new Set([
+  'metadata.google.internal',
+]);
+
+/** DNS error codes that mean "no records of this type" (not a real failure) */
+const BENIGN_DNS_ERRORS: ReadonlySet<string> = new Set(['ENODATA', 'ENOTFOUND']);
 
 export const DEFAULT_ADMIN_API_KEY_ENV = 'GOVYN_ADMIN_API_KEY';
 
@@ -81,41 +108,42 @@ export function normalizeOrigin(origin: string): string | null {
 }
 
 export function isLoopbackIp(ip: string): boolean {
-  const normalized = normalizeIp(ip);
-  if (normalized === '::1') return true;
+  try {
+    const addr = ipaddr.parse(normalizeIp(ip));
 
-  const octets = parseIpv4(normalized);
-  if (!octets) return false;
-  return octets[0] === 127;
+    // Handle IPv4-mapped IPv6 loopback (e.g. ::ffff:127.0.0.1)
+    if (addr.kind() === 'ipv6') {
+      const v6 = addr as ipaddr.IPv6;
+      if (v6.isIPv4MappedAddress()) {
+        return v6.toIPv4Address().range() === 'loopback';
+      }
+    }
+
+    return addr.range() === 'loopback';
+  } catch {
+    return false;
+  }
 }
 
 export function isPrivateOrReservedIp(ip: string): boolean {
-  const normalized = normalizeIp(ip);
-  if (normalized === '::' || normalized === '0.0.0.0') return true;
-  if (isLoopbackIp(normalized)) return true;
+  try {
+    const addr = ipaddr.parse(normalizeIp(ip));
 
-  const ipv4 = parseIpv4(normalized);
-  if (ipv4) {
-    const [a, b] = ipv4;
-    return (
-      a === 0 ||
-      a === 10 ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 198 && (b === 18 || b === 19))
-    );
+    // Handle IPv4-mapped IPv6 addresses (e.g. ::ffff:10.0.0.1, ::ffff:192.168.1.1)
+    // These must be unwrapped and checked against IPv4 private ranges.
+    if (addr.kind() === 'ipv6') {
+      const v6 = addr as ipaddr.IPv6;
+      if (v6.isIPv4MappedAddress()) {
+        const v4 = v6.toIPv4Address();
+        return BLOCKED_IP_RANGES.has(v4.range());
+      }
+    }
+
+    return BLOCKED_IP_RANGES.has(addr.range());
+  } catch {
+    // Unparseable IP = reject (fail closed)
+    return true;
   }
-
-  if (!net.isIPv6(normalized)) return false;
-
-  const firstHextet = Number.parseInt(normalized.split(':')[0] || '0', 16);
-  return (
-    (firstHextet & 0xfe00) === 0xfc00 || // fc00::/7 unique local
-    (firstHextet & 0xffc0) === 0xfe80 || // fe80::/10 link local
-    normalized === '::1'
-  );
 }
 
 function isLocalHostname(hostname: string): boolean {
@@ -159,6 +187,10 @@ function isBlockedWebhookHostname(hostname: string): boolean {
     normalized.endsWith('.internal') ||
     normalized.endsWith('.home.arpa')
   ) {
+    return true;
+  }
+
+  if (BLOCKED_METADATA_HOSTNAMES.has(normalized)) {
     return true;
   }
 
@@ -448,6 +480,85 @@ async function resolvePublicAddress(
   }
 
   return { ok: true, address: normalizedAnswers[0].address, family: normalizedAnswers[0].family };
+}
+
+/**
+ * Async SSRF check with DNS rebinding defense.
+ *
+ * First runs a synchronous check on the URL (protocol, hostname patterns, IP literals).
+ * If the hostname is not an IP literal, resolves both A (IPv4) and AAAA (IPv6) DNS records
+ * and checks ALL resolved addresses against private/reserved ranges.
+ *
+ * Returns true if the URL should be blocked.
+ *
+ * Behavior:
+ * - If the hostname is an IP literal already checked by sync path, skips DNS
+ * - Resolves A and AAAA records in parallel
+ * - ENODATA/ENOTFOUND per record type means "no records" (not a failure)
+ * - If both lookups fail with real errors, returns true (fail closed)
+ * - If ANY resolved IP is private/reserved, returns true
+ */
+export async function resolveAndCheckUrl(urlStr: string): Promise<boolean> {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlStr);
+  } catch {
+    return true; // Unparseable URL = fail closed
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return true;
+  }
+
+  const hostname = normalizeHost(parsed.hostname);
+
+  // Check blocked hostnames (localhost, metadata endpoints, etc.)
+  if (isBlockedWebhookHostname(hostname)) {
+    return true;
+  }
+
+  // If hostname is an IP literal, just check the IP directly
+  if (net.isIP(hostname)) {
+    return isPrivateOrReservedIp(hostname);
+  }
+
+  // Resolve DNS (both A and AAAA) and check all results
+  const [v4Result, v6Result] = await Promise.allSettled([
+    dns.resolve4(hostname),
+    dns.resolve6(hostname),
+  ]);
+
+  const allIps: string[] = [];
+  let v4Benign = false;
+  let v6Benign = false;
+
+  if (v4Result.status === 'fulfilled') {
+    allIps.push(...v4Result.value);
+  } else {
+    const err = v4Result.reason as NodeJS.ErrnoException;
+    v4Benign = BENIGN_DNS_ERRORS.has(err.code ?? '');
+  }
+
+  if (v6Result.status === 'fulfilled') {
+    allIps.push(...v6Result.value);
+  } else {
+    const err = v6Result.reason as NodeJS.ErrnoException;
+    v6Benign = BENIGN_DNS_ERRORS.has(err.code ?? '');
+  }
+
+  // If both failed with real errors (not ENODATA/ENOTFOUND), fail closed
+  if (allIps.length === 0) {
+    const bothFailed = v4Result.status === 'rejected' && v6Result.status === 'rejected';
+    if (bothFailed && !v4Benign && !v6Benign) {
+      return true;
+    }
+    // Both returned ENODATA/ENOTFOUND: hostname has no records -- allow
+    // (will fail at the actual fetch anyway)
+    return false;
+  }
+
+  // If ANY resolved IP is private/reserved, block
+  return allIps.some((ip) => isPrivateOrReservedIp(ip));
 }
 
 export async function resolveWebhookTarget(

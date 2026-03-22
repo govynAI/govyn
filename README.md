@@ -34,6 +34,21 @@ Govyn is a wall. There are no other doors.
 - **Zero agent changes** — Agents just point at a different base URL. No SDK imports, no code changes
 - **Fail-open by default** — Proxy errors don't break your agents. Configurable to fail-closed for high-security deployments
 
+## Govyn Cloud
+
+The open-source proxy handles governance enforcement on your own infrastructure. [Govyn Cloud](https://govynai.com) adds managed features that build on top of the proxy:
+
+- **Semantic caching** — Hash-based exact-match and embedding-based semantic similarity caching for tool calls. Policy-driven, per-tool TTL, auto-suggest cacheable tools from observed patterns. Reduces redundant LLM calls by serving cached results for identical or semantically similar stateless tool calls.
+- **Safety inspector** — 5 SQL-based analyzers observe agent behavior and auto-suggest policies (model routing, rate limits, budgets, content filters, cache policies). One-click apply with projected impact and confidence scores. Observe mode lets you trial policies without enforcement.
+- **MCP governance** — MCP server registry with encrypted auth, JSON-RPC tool discovery, and default-deny proxy gateway. Extends the proxy model to MCP tool-calling protocols with full policy enforcement and telemetry.
+- **Compliance export** — PDF compliance reports with 5 audit sections, R2 storage, scheduled and on-demand generation, email delivery via Resend. Provides auditable proof of governance for regulated environments.
+- **Team CLI** — Browser OAuth login, live activity tail, YAML policy import/export, and commands for all cloud features. Terminal-first workflow for engineering teams.
+- **Dashboard** — React SPA with Clerk auth, cost overview, agent detail, activity feed, policy management, approval queue, cache statistics, alert configuration, and billing management via Stripe.
+- **Multi-tenant isolation** — Per-org proxy auth tokens, AES-256-GCM transit encryption, encryption key rotation, and prefix-based O(1) API key lookup.
+- **Transactional emails** — 9 branded email templates (welcome, budget alerts, anomaly alerts, approval notifications, billing lifecycle, compliance reports) via Resend.
+
+[Try Govyn Cloud →](https://govynai.com)
+
 ## Quickstart
 
 Get from zero to a governed API call in under 5 minutes.

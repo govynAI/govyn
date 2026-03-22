@@ -52,17 +52,7 @@ function normalizeIp(ip: string): string {
   return normalized.startsWith('::ffff:') ? normalized.slice(7) : normalized;
 }
 
-function parseIpv4(ip: string): number[] | null {
-  const parts = normalizeIp(ip).split('.');
-  if (parts.length !== 4) return null;
 
-  const octets = parts.map((part) => Number.parseInt(part, 10));
-  if (octets.some((octet) => Number.isNaN(octet) || octet < 0 || octet > 255)) {
-    return null;
-  }
-
-  return octets;
-}
 
 function extractBearerToken(headerValue: string | null): string | null {
   if (!headerValue) return null;

@@ -977,48 +977,56 @@ policies:
         };
       }
 
-      it('detects SSN pattern (XXX-XX-XXXX) in JSON string values', () => {
+      /** Helper: wrap text in an OpenAI-style messages body */
+      function makeMessageBody(text: string): string {
+        return JSON.stringify({
+          model: 'gpt-4',
+          messages: [{ role: 'user', content: text }],
+        });
+      }
+
+      it('detects SSN pattern (XXX-XX-XXXX) in message content', () => {
         const engine = new PolicyEngine();
         engine.loadFromPolicies([makeContentFilter({ patterns: ['ssn'] })]);
 
         const result = engine.evaluate(makeContext({
-          body: '{"input":"my ssn is 123-45-6789"}',
+          body: makeMessageBody('my ssn is 123-45-6789'),
         }));
         expect(result.allowed).toBe(false);
         expect(result.denied).toBeDefined();
         expect(result.denied!.policyType).toBe('content_filter');
       });
 
-      it('detects credit card pattern (16 digits) in JSON string values', () => {
+      it('detects credit card pattern (16 digits) in message content', () => {
         const engine = new PolicyEngine();
         engine.loadFromPolicies([makeContentFilter({ patterns: ['credit_card'] })]);
 
         const result = engine.evaluate(makeContext({
-          body: '{"msg":"pay with 4111111111111111"}',
+          body: makeMessageBody('pay with 4111111111111111'),
         }));
         expect(result.allowed).toBe(false);
         expect(result.denied).toBeDefined();
         expect(result.denied!.policyType).toBe('content_filter');
       });
 
-      it('detects email pattern in JSON string values', () => {
+      it('detects email pattern in message content', () => {
         const engine = new PolicyEngine();
         engine.loadFromPolicies([makeContentFilter({ patterns: ['email'] })]);
 
         const result = engine.evaluate(makeContext({
-          body: '{"contact":"user@example.com"}',
+          body: makeMessageBody('contact user@example.com'),
         }));
         expect(result.allowed).toBe(false);
         expect(result.denied).toBeDefined();
         expect(result.denied!.policyType).toBe('content_filter');
       });
 
-      it('detects phone pattern in JSON string values', () => {
+      it('detects phone pattern in message content', () => {
         const engine = new PolicyEngine();
         engine.loadFromPolicies([makeContentFilter({ patterns: ['phone'] })]);
 
         const result = engine.evaluate(makeContext({
-          body: '{"phone":"(555) 123-4567"}',
+          body: makeMessageBody('call (555) 123-4567'),
         }));
         expect(result.allowed).toBe(false);
         expect(result.denied).toBeDefined();
@@ -1030,18 +1038,7 @@ policies:
         engine.loadFromPolicies([makeContentFilter({ patterns: ['ssn', 'credit_card'] })]);
 
         const result = engine.evaluate(makeContext({
-          body: '{"msg":"hello world"}',
-        }));
-        expect(result.allowed).toBe(true);
-      });
-
-      it('scans only JSON string values, not keys or structure', () => {
-        const engine = new PolicyEngine();
-        engine.loadFromPolicies([makeContentFilter({ patterns: ['ssn'] })]);
-
-        // Key name 'ssn_field' should NOT trigger, only string values are scanned
-        const result = engine.evaluate(makeContext({
-          body: '{"ssn_field":"no-match-here"}',
+          body: makeMessageBody('hello world'),
         }));
         expect(result.allowed).toBe(true);
       });
@@ -1053,7 +1050,7 @@ policies:
         })]);
 
         const result = engine.evaluate(makeContext({
-          body: '{"data":"my SECRET_KEY_abc123 is here"}',
+          body: makeMessageBody('my SECRET_KEY_abc123 is here'),
         }));
         expect(result.allowed).toBe(false);
         expect(result.denied).toBeDefined();
@@ -1067,7 +1064,7 @@ policies:
         })]);
 
         const result = engine.evaluate(makeContext({
-          body: '{"input":"my ssn is 123-45-6789"}',
+          body: makeMessageBody('my ssn is 123-45-6789'),
         }));
         expect(result.allowed).toBe(false);
         expect(result.denied).toBeDefined();
@@ -1083,7 +1080,7 @@ policies:
         })]);
 
         const result = engine.evaluate(makeContext({
-          body: '{"input":"my ssn is 123-45-6789"}',
+          body: makeMessageBody('my ssn is 123-45-6789'),
         }));
         expect(result.allowed).toBe(false);
         expect(result.denied).toBeDefined();
@@ -1103,16 +1100,170 @@ policies:
         expect(result.allowed).toBe(true);
       });
 
-      it('handles body with nested JSON objects', () => {
+      it('scans message content from multi-turn conversation', () => {
         const engine = new PolicyEngine();
         engine.loadFromPolicies([makeContentFilter({ patterns: ['ssn'] })]);
 
-        const result = engine.evaluate(makeContext({
-          body: '{"outer":{"inner":"ssn 123-45-6789"}}',
-        }));
+        const body = JSON.stringify({
+          model: 'gpt-4',
+          messages: [
+            { role: 'system', content: 'You are helpful.' },
+            { role: 'user', content: 'My SSN is 123-45-6789' },
+          ],
+        });
+        const result = engine.evaluate(makeContext({ body }));
         expect(result.allowed).toBe(false);
         expect(result.denied).toBeDefined();
         expect(result.denied!.policyType).toBe('content_filter');
+      });
+
+      it('scans multipart content arrays (vision format)', () => {
+        const engine = new PolicyEngine();
+        engine.loadFromPolicies([makeContentFilter({ patterns: ['ssn'] })]);
+
+        const body = JSON.stringify({
+          model: 'gpt-4-vision-preview',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: 'My SSN is 123-45-6789' },
+              { type: 'image_url', image_url: { url: 'https://example.com/img.png' } },
+            ],
+          }],
+        });
+        const result = engine.evaluate(makeContext({ body }));
+        expect(result.allowed).toBe(false);
+        expect(result.denied!.policyType).toBe('content_filter');
+      });
+
+      it('does NOT match PII-like strings in model name (metadata excluded)', () => {
+        const engine = new PolicyEngine();
+        engine.loadFromPolicies([makeContentFilter({ patterns: ['ssn'] })]);
+
+        // SSN-like pattern in model name should NOT trigger content filter
+        const body = JSON.stringify({
+          model: '123-45-6789',
+          messages: [{ role: 'user', content: 'Innocent request' }],
+        });
+        const result = engine.evaluate(makeContext({ body }));
+        expect(result.allowed).toBe(true);
+      });
+
+      it('does NOT match patterns in non-message JSON fields', () => {
+        const engine = new PolicyEngine();
+        engine.loadFromPolicies([makeContentFilter({ patterns: ['email'] })]);
+
+        // Email in a random metadata field should NOT trigger content filter
+        const body = JSON.stringify({
+          model: 'gpt-4',
+          user: 'admin@example.com',
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+        const result = engine.evaluate(makeContext({ body }));
+        expect(result.allowed).toBe(true);
+      });
+
+      it('allows body with no messages array', () => {
+        const engine = new PolicyEngine();
+        engine.loadFromPolicies([makeContentFilter({ patterns: ['ssn'] })]);
+
+        // Body without messages field (e.g., legacy completion format)
+        const result = engine.evaluate(makeContext({
+          body: '{"prompt":"my ssn is 123-45-6789"}',
+        }));
+        expect(result.allowed).toBe(true);
+      });
+    });
+
+    // ── ReDoS protection ──────────────────────────────────────
+
+    describe('ReDoS protection', () => {
+      it('treats unsafe regex in block policy as non-match (allows request)', () => {
+        const engine = new PolicyEngine();
+        engine.loadFromPolicies([{
+          name: 'redos-block',
+          type: 'block',
+          enabled: true,
+          scope: { level: 'global' },
+          match: {
+            model: '(a+)+',  // ReDoS pattern
+            regex: true,
+          },
+        } as BlockPolicy]);
+
+        // Should NOT hang; unsafe pattern returns false (non-match = allows)
+        const result = engine.evaluate(makeContext({ model: 'aaaaaaaaaaaaaaa!' }));
+        expect(result.allowed).toBe(true);
+      });
+
+      it('treats unsafe regex in block path as non-match', () => {
+        const engine = new PolicyEngine();
+        engine.loadFromPolicies([{
+          name: 'redos-path',
+          type: 'block',
+          enabled: true,
+          scope: { level: 'global' },
+          match: {
+            path: ['(a', '+)+', '$'].join(''),
+            regex: true,
+          },
+        } as BlockPolicy]);
+
+        const result = engine.evaluate(makeContext({ path: 'aaaaaaaaaaaaaaa!' }));
+        expect(result.allowed).toBe(true);
+      });
+
+      it('treats unsafe regex in content filter as non-match', () => {
+        const engine = new PolicyEngine();
+        engine.loadFromPolicies([{
+          name: 'redos-content',
+          type: 'content_filter',
+          enabled: true,
+          scope: { level: 'global' },
+          patterns: ['(a+)+'],  // ReDoS pattern
+        } as ContentFilterPolicy]);
+
+        const body = JSON.stringify({
+          messages: [{ role: 'user', content: 'aaaaaaaaaaaaaaa!' }],
+        });
+        const result = engine.evaluate(makeContext({ body }));
+        expect(result.allowed).toBe(true);
+      });
+
+      it('safe regex patterns still work normally in block policies', () => {
+        const engine = new PolicyEngine();
+        engine.loadFromPolicies([{
+          name: 'safe-block',
+          type: 'block',
+          enabled: true,
+          scope: { level: 'global' },
+          match: {
+            model: 'gpt-4.*turbo',
+            regex: true,
+          },
+        } as BlockPolicy]);
+
+        const result = engine.evaluate(makeContext({ model: 'gpt-4-turbo' }));
+        expect(result.allowed).toBe(false);
+        expect(result.denied!.policyName).toBe('safe-block');
+      });
+
+      it('safe regex patterns still work normally in content filters', () => {
+        const engine = new PolicyEngine();
+        engine.loadFromPolicies([{
+          name: 'safe-content',
+          type: 'content_filter',
+          enabled: true,
+          scope: { level: 'global' },
+          patterns: ['SECRET_KEY_\\w+'],
+        } as ContentFilterPolicy]);
+
+        const body = JSON.stringify({
+          messages: [{ role: 'user', content: 'Here is SECRET_KEY_abc123' }],
+        });
+        const result = engine.evaluate(makeContext({ body }));
+        expect(result.allowed).toBe(false);
+        expect(result.denied!.policyName).toBe('safe-content');
       });
     });
 

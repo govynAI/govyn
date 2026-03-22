@@ -19,6 +19,8 @@
 
 import { parsePolicies, parsePoliciesFromFile } from './policy-parser.js';
 import { CostAggregator } from './cost-aggregator.js';
+import { safeRegexTest } from './safe-regex.js';
+import { extractMessageContent } from './message-content.js';
 import type {
   Policy,
   PolicyType,
@@ -123,7 +125,7 @@ function evaluateBlock(policy: BlockPolicy, context: PolicyRequestContext): Sing
   if (match.model !== undefined) {
     const contextModel = context.model ?? '';
     if (useRegex) {
-      if (!new RegExp(match.model).test(contextModel)) {
+      if (!safeRegexTest(match.model, contextModel)) {
         return { policyName: policy.name, policyType: 'block', allowed: true };
       }
     } else {
@@ -135,7 +137,7 @@ function evaluateBlock(policy: BlockPolicy, context: PolicyRequestContext): Sing
 
   if (match.path !== undefined) {
     if (useRegex) {
-      if (!new RegExp(match.path).test(context.path)) {
+      if (!safeRegexTest(match.path, context.path)) {
         return { policyName: policy.name, policyType: 'block', allowed: true };
       }
     } else {
@@ -147,7 +149,7 @@ function evaluateBlock(policy: BlockPolicy, context: PolicyRequestContext): Sing
 
   if (match.body !== undefined && context.body) {
     if (useRegex) {
-      if (!new RegExp(match.body).test(context.body)) {
+      if (!safeRegexTest(match.body, context.body)) {
         return { policyName: policy.name, policyType: 'block', allowed: true };
       }
     } else {
@@ -164,7 +166,7 @@ function evaluateBlock(policy: BlockPolicy, context: PolicyRequestContext): Sing
     for (const [headerName, pattern] of Object.entries(match.headers)) {
       const headerValue = context.headers[headerName.toLowerCase()] ?? context.headers[headerName] ?? '';
       if (useRegex) {
-        if (!new RegExp(pattern).test(headerValue)) {
+        if (!safeRegexTest(pattern, headerValue)) {
           return { policyName: policy.name, policyType: 'block', allowed: true };
         }
       } else {
@@ -350,31 +352,15 @@ const BUILTIN_PATTERNS: Record<string, RegExp> = {
 };
 
 /**
- * Recursively extract all string values from a parsed JSON object.
- * Only values are extracted (not keys), to avoid false positives from JSON structure.
- */
-function extractStringValues(obj: unknown): string[] {
-  const values: string[] = [];
-  if (typeof obj === 'string') {
-    values.push(obj);
-  } else if (Array.isArray(obj)) {
-    for (const item of obj) {
-      values.push(...extractStringValues(item));
-    }
-  } else if (obj !== null && typeof obj === 'object') {
-    for (const val of Object.values(obj as Record<string, unknown>)) {
-      values.push(...extractStringValues(val));
-    }
-  }
-  return values;
-}
-
-/**
  * Evaluate a content filter policy against a request context.
  *
- * Parses the request body as JSON, extracts all string values (recursive),
- * and scans them against configured patterns. Built-in pattern names
- * resolve to predefined regexes; unrecognized names are treated as custom regex strings.
+ * Parses the request body as JSON, extracts only message content text
+ * (not metadata like model names or token counts) and scans it against
+ * configured patterns. Built-in pattern names resolve to predefined
+ * regexes; unrecognized names are treated as custom regex strings.
+ *
+ * Uses extractMessageContent() for scoped extraction and safeRegexTest()
+ * for ReDoS-safe custom pattern matching.
  */
 function evaluateContentFilter(
   policy: ContentFilterPolicy,
@@ -384,24 +370,34 @@ function evaluateContentFilter(
     return { policyName: policy.name, policyType: 'content_filter', allowed: true };
   }
 
-  // Parse body as JSON and extract string values
-  let stringValues: string[];
+  // Parse body as JSON and extract message content only (not metadata)
+  let messageText: string;
   try {
-    const parsed = JSON.parse(context.body);
-    stringValues = extractStringValues(parsed);
+    const parsed = JSON.parse(context.body) as Record<string, unknown>;
+    messageText = extractMessageContent(parsed);
   } catch {
     // Non-JSON body — can't scan, allow
     return { policyName: policy.name, policyType: 'content_filter', allowed: true };
   }
 
-  const combinedText = stringValues.join(' ');
+  // No message content to scan — allow
+  if (!messageText) {
+    return { policyName: policy.name, policyType: 'content_filter', allowed: true };
+  }
 
   // Check each pattern
   for (const pattern of policy.patterns) {
     const builtinRegex = BUILTIN_PATTERNS[pattern];
-    const regex = builtinRegex ?? new RegExp(pattern);
 
-    if (regex.test(combinedText)) {
+    let matched: boolean;
+    if (builtinRegex) {
+      matched = builtinRegex.test(messageText);
+    } else {
+      // Custom regex pattern — use ReDoS-safe test
+      matched = safeRegexTest(pattern, messageText);
+    }
+
+    if (matched) {
       const reason = policy.reveal_pattern
         ? `Content filter triggered: ${builtinRegex ? pattern : 'custom pattern'} detected`
         : `Content blocked by policy '${policy.name}'`;
@@ -781,7 +777,7 @@ function evaluateRequireApproval(
   if (match.model !== undefined) {
     const contextModel = context.model ?? '';
     if (useRegex) {
-      if (!new RegExp(match.model).test(contextModel)) {
+      if (!safeRegexTest(match.model, contextModel)) {
         return { policyName: policy.name, policyType: 'require_approval', allowed: true };
       }
     } else {
@@ -793,7 +789,7 @@ function evaluateRequireApproval(
 
   if (match.path !== undefined) {
     if (useRegex) {
-      if (!new RegExp(match.path).test(context.path)) {
+      if (!safeRegexTest(match.path, context.path)) {
         return { policyName: policy.name, policyType: 'require_approval', allowed: true };
       }
     } else {

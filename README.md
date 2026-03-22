@@ -27,6 +27,9 @@ Govyn is a wall. There are no other doors.
 - **Policy engine** — YAML-based rules: rate limits, model restrictions, require-approval gates, and custom policies
 - **Action logging** — Every request logged with agent identity, cost, tokens, latency, and full context
 - **Multi-provider** — Route OpenAI and Anthropic traffic through a single proxy with per-provider API keys
+- **Content filtering** — Built-in PII detection (SSN, credit card, email, phone) plus custom regex patterns evaluated against message content only
+- **SSRF protection** — IPv4 and IPv6 private range blocking, DNS rebinding defense with fetch-time resolution, cloud metadata endpoint blocking
+- **ReDoS protection** — All user-supplied regex patterns validated against catastrophic backtracking before compilation
 - **Locked-down management API** — Local-only by default, with optional admin API key and browser origin allowlist for remote dashboards
 - **Zero agent changes** — Agents just point at a different base URL. No SDK imports, no code changes
 - **Fail-open by default** — Proxy errors don't break your agents. Configurable to fail-closed for high-security deployments
@@ -184,6 +187,9 @@ See [`configs/openai-only.yaml`](./configs/openai-only.yaml) for the canonical m
 - `GET /api/approvals/:id` remains accessible without admin auth so the approval polling flow continues to work for agents.
 - Approval tokens are single-use and bound to the original approved agent, target path, and request body.
 - Alert webhooks reject loopback and private-network destinations, resolve DNS before connect, and block redirects to prevent SSRF against internal services.
+- SSRF protection covers IPv4 private ranges, IPv6 loopback/link-local/ULA, IPv4-mapped IPv6, cloud metadata endpoints, and DNS rebinding attacks (fetch-time resolution).
+- Policy regex patterns from YAML are validated against ReDoS (nested quantifiers, overlapping alternation) before compilation. Unsafe patterns are rejected as non-matches.
+- Content filter patterns evaluate against extracted message content only — model names, token counts, and request metadata cannot trigger or evade content filters.
 
 ### Generating Agent Keys
 

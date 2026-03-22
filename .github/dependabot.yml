@@ -5,12 +5,36 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      eslint:
+        patterns:
+          - "eslint*"
+          - "@eslint/*"
+          - "typescript-eslint"
+      typescript:
+        patterns:
+          - "typescript"
+          - "@types/*"
+      test:
+        patterns:
+          - "vitest"
 
   - package-ecosystem: "npm"
     directory: "/dashboard"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+      codemirror:
+        patterns:
+          - "@codemirror/*"
+      vite:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
 
   - package-ecosystem: "pip"
     directory: "/python-sdk"

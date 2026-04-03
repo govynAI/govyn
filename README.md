@@ -1,38 +1,136 @@
-# Govyn
+<p align="center">
+  <strong>Govyn</strong><br>
+  Open-source AI agent governance proxy
+</p>
 
-**The governance proxy for AI agents. Not an SDK. Not a wrapper. A wall.**
-
-Every other agent governance tool is a library you import. If your agent — or any code it touches — makes a direct HTTP call, governance disappears. Govyn is different. It's an API proxy that holds your real API keys. Your agents only get a proxy URL. There is no alternative path to the real API. Governance is enforced by architecture, not by convention.
-
-```
-SDK MODEL:
-Agent [has real API key] → tries wrapper → OpenAI API
-Agent [has real API key] → skips wrapper → OpenAI API  ← governance bypassed
-
-PROXY MODEL:
-Agent [no real API key] → Govyn Proxy [has real key, enforces rules] → OpenAI API
-Agent [no real API key] → OpenAI API directly → REJECTED (no key)
-```
-
-SDK governance is a door lock — effective until someone finds another door.
-Govyn is a wall. There are no other doors.
+<p align="center">
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/providers-OpenAI%20%7C%20Anthropic%20%7C%20Google%20%7C%20Mistral-5b82d6" alt="Multi-Provider">
+  <img src="https://img.shields.io/badge/type-API%20Proxy-brightgreen" alt="API Proxy">
+</p>
 
 ---
 
-## Features
+An API proxy that sits between your AI agents and LLM providers. Your agents get a proxy URL — never real API keys. Budget enforcement, loop detection, policy-as-code, and smart model routing happen at the infrastructure layer, not inside your agent's code.
 
-- **Per-agent budgets** — Set daily/monthly spend limits per agent with hard (block) or soft (warn) enforcement
-- **Cost tracking** — Real-time cost aggregation across OpenAI, Anthropic, and compatible providers
-- **Loop detection** — Automatically detect and block agents stuck in repetitive call patterns
-- **Policy engine** — YAML-based rules: rate limits, model restrictions, require-approval gates, and custom policies
-- **Action logging** — Every request logged with agent identity, cost, tokens, latency, and full context
-- **Multi-provider** — Route OpenAI and Anthropic traffic through a single proxy with per-provider API keys
-- **Content filtering** — Built-in PII detection (SSN, credit card, email, phone) plus custom regex patterns evaluated against message content only
-- **SSRF protection** — IPv4 and IPv6 private range blocking, DNS rebinding defense with fetch-time resolution, cloud metadata endpoint blocking
-- **ReDoS protection** — All user-supplied regex patterns validated against catastrophic backtracking before compilation
-- **Locked-down management API** — Local-only by default, with optional admin API key and browser origin allowlist for remote dashboards
-- **Zero agent changes** — Agents just point at a different base URL. No SDK imports, no code changes
-- **Fail-open by default** — Proxy errors don't break your agents. Configurable to fail-closed for high-security deployments
+```bash
+git clone https://github.com/govynAI/govyn.git && cd govyn && npm install && npm start
+```
+
+**SDK governance is a door lock — effective until someone finds another door. Govyn is a wall. There are no other doors.**
+
+## The Problem
+
+Every AI agent governance tool on the market is a library you import — an in-process wrapper that disappears the moment any code makes a direct HTTP call. This is the approach that failed when [Meta's alignment director lost 200+ emails](https://marklaursen.com/blog/ai-agents-need-governance-not-guardrails) because context window compaction silently stripped her safety instructions.
+
+SDK-based governance is enforced by convention, not architecture. It works only as long as every line of code cooperates. In production, with autonomous agents that write and execute their own code, [that assumption is dangerous](https://govynai.com/blog/proxy-vs-sdk-ai-agent-governance).
+
+## How Govyn Works
+
+```
+  Your Agent                    Govyn Proxy                   LLM Provider
+  +--------+                   +-------------+                +-----------+
+  |        |  proxy URL        |             |  real API key  |           |
+  |  Agent +------------------>+  1. Auth    +--------------->+  OpenAI   |
+  |        |  (no real key)    |  2. Policy  |                |  Anthropic|
+  |        |                   |  3. Budget  |  response      |  Google   |
+  |        |<------------------+  4. Loop    +<---------------+  Mistral  |
+  |        |  response         |  5. Route   |                |           |
+  +--------+                   |  6. Log     |                +-----------+
+                               +-------------+
+```
+
+1. **Agent sends request** — standard API call to the proxy URL. No knowledge of the real API key.
+2. **Policy evaluation** — YAML-defined rules checked in-memory. Model restrictions, content filters, human approval queues.
+3. **Budget check** — per-agent daily/monthly spend limits with hard cutoffs. Not warnings — hard stops.
+4. **Loop detection** — detects repetitive request patterns and [kills them before they burn your API budget overnight](https://govynai.com/blog/openclaw-agent-governance).
+5. **Smart model routing** — downgrades simple requests to cheaper models transparently. Haiku instead of Opus, GPT-4o-mini instead of GPT-4o. [60-80% cost savings](https://govynai.com/blog/cut-ai-api-costs-without-code-changes) on qualifying requests.
+6. **Forward and log** — injects real API key, forwards to provider, logs the full round trip.
+
+None of these checks depend on the agent's cooperation. The agent cannot skip a step, forget an instruction, or lose context.
+
+## Quick Start
+
+```bash
+# Clone and install
+git clone https://github.com/govynAI/govyn.git
+cd govyn
+npm install
+
+# Configure your provider keys
+cp .env.example .env
+# Edit .env with your OpenAI/Anthropic/Google API keys
+
+# Start the proxy
+npm start
+```
+
+Point your agent at the proxy URL instead of the provider URL:
+
+```bash
+# Before (agent holds real key)
+OPENAI_API_KEY=sk-real-key-here
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# After (agent holds proxy token only)
+OPENAI_API_KEY=proxy-token-here
+OPENAI_BASE_URL=http://localhost:3000/v1
+```
+
+Zero agent code changes. Change the base URL and key. That's it.
+
+## SDK Wrappers vs. Govyn
+
+| | SDK Wrapper | Govyn Proxy |
+|---|---|---|
+| **Agent holds API keys** | Yes — can bypass wrapper | No — proxy holds keys |
+| **Bypassable** | Yes — direct HTTP call skips it | No — no key means no access |
+| **Survives context compaction** | No — instructions can be stripped | Yes — enforcement is external |
+| **Budget enforcement** | In-process, trust-based | Infrastructure-level, hard cutoff |
+| **Loop detection** | Requires agent self-awareness | Proxy detects patterns externally |
+| **Audit trail** | Depends on agent logging | Every request logged at proxy |
+| **Agent code changes** | Required (import library) | None — change the base URL |
+
+## Policy-as-Code
+
+Governance rules live in YAML files in version control. Every change is reviewed, auditable, and rollback-ready.
+
+```yaml
+# policies/production.yaml
+agents:
+  research-agent:
+    allowed_models:
+      - claude-sonnet-4-6
+      - gpt-4o-mini
+    budget:
+      daily: 10.00
+      monthly: 200.00
+    rate_limit: 60/minute
+    content_filters:
+      - block_patterns: ["DELETE FROM", "DROP TABLE", "rm -rf"]
+    require_approval:
+      - model: claude-opus-4-6  # expensive model needs human OK
+
+  code-agent:
+    allowed_models:
+      - claude-sonnet-4-6
+    budget:
+      daily: 25.00
+      monthly: 500.00
+    smart_routing:
+      enabled: true
+      downgrade_simple_to: claude-haiku-4-5
+```
+
+## Key Technical Features
+
+**Semantic Caching** — Vector embeddings with cosine similarity on structured JSON arguments, plus deterministic SHA-256 hashing. 53-73% cost reduction in production workloads. 0% false-positive rate by caching only stateless tool invocations. [How we made it tamper-resistant](https://govynai.com/blog/tamper-resistant-ai-caching).
+
+**Streaming-Aware Telemetry** — Extracts token counts and cost metrics inline from SSE streams (OpenAI and Anthropic formats) without buffering. [How to detect token count manipulation](https://govynai.com/blog/detecting-token-count-manipulation).
+
+**MCP Governance Gateway** — HTTP-based tool discovery, JSON-RPC forwarding, and default-deny policy enforcement. Control which agents can invoke which external MCP tools at per-tool granularity.
+
+**Multi-Tenant Security** — Per-org AES-256-GCM BYOK encryption, HMAC-SHA256 prefix-indexed key lookup, zero-downtime key rotation, SSRF protection, ReDoS-safe regex evaluation, timing-safe authentication. [Full security architecture deep dive](https://govynai.com/blog/ssrf-injection-defense-ai-proxy).
 
 ## Govyn Cloud
 
@@ -49,238 +147,49 @@ The open-source proxy handles governance enforcement on your own infrastructure.
 
 [Try Govyn Cloud →](https://govynai.com)
 
-## Quickstart
+## Stack
 
-Get from zero to a governed API call in under 5 minutes.
-
-### Prerequisites
-
-- Node.js 20+
-- An LLM API key (OpenAI or Anthropic)
-
-### Install and Configure
-
-```bash
-npx govyn init
-```
-
-The wizard walks you through provider selection, API key configuration, budget limits, agent naming, and persistence. It produces a local `govyn.config.yaml` in the current directory, defaults `database.url` to `sqlite:./govyn.db`, and can also point at PostgreSQL if you already run one.
-
-### Start the Proxy
-
-```bash
-npx govyn
-```
-
-The proxy starts on port 4000 by default.
-
-### Docker
-
-```bash
-docker run -p 4000:4000 -e OPENAI_API_KEY=sk-... govyn
-```
-
-Or with Docker Compose:
-
-```bash
-docker-compose up
-```
-
-For persistent self-hosting, mount a volume for your runtime files (`govyn.config.yaml`, `govyn.auth.json`, `govyn.db`, `policies.yaml`, and `logs/`) or point `database.url` at PostgreSQL instead of the default SQLite file.
-
-### Verify
-
-```bash
-curl http://localhost:4000/health
-# {"status":"ok"}
-```
-
-### Make Your First Governed Request
-
-```bash
-curl http://localhost:4000/v1/openai/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "X-Govyn-Agent: my-first-agent" \
-  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Hello"}]}'
-```
-
-The proxy forwards to OpenAI, tracks cost, enforces budget limits, and logs the action — all transparently.
-
-## Python SDK
-
-For Python agents, use the `govynai` package for drop-in wrappers around the OpenAI and Anthropic SDKs:
-
-```bash
-pip install govynai[all]
-```
-
-```python
-from govynai import GovynOpenAI
-
-client = GovynOpenAI(agent_id="my-agent")
-response = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=[{"role": "user", "content": "Hello"}]
-)
-```
-
-The wrapper automatically routes through your Govyn proxy, injects agent headers, and surfaces governance errors as typed exceptions. See [`python-sdk/`](./python-sdk/) for full documentation.
-
-## Configuration
-
-Govyn uses a local `govyn.config.yaml` runtime file. Run `npx govyn init` to generate one interactively in your working directory, or create one manually. The repo ships example templates under [`configs/`](./configs/); it does not ship a ready-to-use operator config.
-
-`govyn.config.yaml` is your deployment file. Keep it local to your environment and do not treat it as a shared repo sample.
-
-The OSS dashboard also uses a local `govyn.auth.json` file for its single admin account. Create it during `npx govyn init` or later with `npx govyn admin setup`. Keep that file local and out of git too.
-
-Govyn now uses SQLite by default for persistence. The default runtime database is `./govyn.db`, which powers approvals, alerts, cost history, and other durable operational data on a single host. Keep that file local and out of git too.
-
-For the smallest local-only starting point, use [`configs/openai-only.yaml`](./configs/openai-only.yaml) or generate one with `npx govyn init`. A minimal manual config looks like this:
-
-```yaml
-version: 1
-proxy:
-  port: 4000
-  host: 127.0.0.1
-
-providers:
-  openai:
-    base_url: https://api.openai.com
-    api_key_env: OPENAI_API_KEY
-  anthropic:
-    base_url: https://api.anthropic.com
-    api_key_env: ANTHROPIC_API_KEY
-
-agents:
-  research-agent: {}
-
-database:
-  url: sqlite:./govyn.db
-
-budgets:
-  research-agent:
-    daily_limit: 10.00
-    monthly_limit: 100.00
-    limit_type: hard
-```
-
-If you omit `database.url`, Govyn still defaults to `sqlite:./govyn.db` beside your config. Keeping it explicit in your local config makes the deployment shape clearer.
-
-If you expose the proxy off-machine, add your own generated `agents.<name>.api_keys`. If you manage the proxy from a remote dashboard, create the local admin account on the host and add the dashboard origin under `security.trusted_origins`. Only set `security.admin_api_key_env` if you also want automation or break-glass API access.
-
-## Dashboard Auth
-
-- The OSS dashboard uses one local admin username/password account.
-- There is no Clerk, no email-based reset flow, no signup, and no OIDC/SAML in this repo.
-- Create the admin account with `npx govyn admin setup`, or let `npx govyn init` create it during first-run setup.
-- Reset the password locally with `npx govyn admin reset-password`.
-- Browser logins use an `HttpOnly` session cookie. `GOVYN_ADMIN_API_KEY` remains available for automation and break-glass recovery, not normal dashboard sign-in.
-
-## Persistence
-
-- Default OSS self-hosting: `database.url: sqlite:./govyn.db`
-- SQLite is the recommended default for one host, one admin, and the normal self-hosted OSS setup.
-- SQLite powers approvals, alerts, cost history, and other durable operational state without requiring a separate database service.
-- Switch to PostgreSQL by setting `database.url: postgres://...` when you need a shared database, managed backups, or multiple Govyn instances against the same backend.
-- The example configs under [`configs/`](./configs/) show the SQLite default and include commented PostgreSQL upgrade hints.
-
-See [`configs/openai-only.yaml`](./configs/openai-only.yaml) for the canonical minimal example, or browse [`configs/`](./configs/) for more setups (single provider, multi-provider, teams).
-
-## Security Defaults
-
-- Govyn does not ship any real agent keys, admin keys, or provider secrets. Every key shown in docs or UI is a placeholder or generated locally for the operator to adopt.
-- The proxy binds to `127.0.0.1` by default so a fresh install is local-only.
-- If you bind the proxy to a non-loopback host such as `0.0.0.0`, Govyn automatically requires `Authorization: Bearer <agent-api-key>` on proxied model requests. Configure those keys under `agents.<name>.api_keys`.
-- You can explicitly set `security.require_agent_api_key: false`, but that creates an unauthenticated spend surface and is unsafe on shared or public networks.
-- `/api/*` management endpoints are restricted to local requests by default.
-- Once the local dashboard admin exists, browser management uses the dashboard session cookie instead of a pasted API key.
-- To manage the proxy from another browser origin, add that origin under `security.trusted_origins` and sign in with the local admin username/password.
-- `GOVYN_ADMIN_API_KEY` (or another env var via `security.admin_api_key_env`) is for automation, CLI tooling, and break-glass remote API access via `X-Govyn-Admin-Key`.
-- Browser dashboards must be explicitly listed under `security.trusted_origins`. Localhost origins are allowed automatically for development.
-- Browser-origin management requests from untrusted origins are rejected even on localhost, which blocks CSRF-style admin actions against a developer machine.
-- `GET /api/approvals/:id` remains accessible without admin auth so the approval polling flow continues to work for agents.
-- Approval tokens are single-use and bound to the original approved agent, target path, and request body.
-- Alert webhooks reject loopback and private-network destinations, resolve DNS before connect, and block redirects to prevent SSRF against internal services.
-- SSRF protection covers IPv4 private ranges, IPv6 loopback/link-local/ULA, IPv4-mapped IPv6, cloud metadata endpoints, and DNS rebinding attacks (fetch-time resolution).
-- Policy regex patterns from YAML are validated against ReDoS (nested quantifiers, overlapping alternation) before compilation. Unsafe patterns are rejected as non-matches.
-- Content filter patterns evaluate against extracted message content only — model names, token counts, and request metadata cannot trigger or evade content filters.
-
-### Generating Agent Keys
-
-- Generate your own long random value for every agent. Do not reuse provider API keys as agent API keys.
-- The dashboard Settings page includes a browser-local generator and copy-ready YAML snippet. It helps you prepare local config only; it does not write proxy config, and the generated key is not sent to the proxy unless you manually add it to your config.
-- If you prefer the terminal, `node -e "console.log('gvn_' + require('node:crypto').randomBytes(32).toString('hex'))"` prints a suitable key.
-
-## Policy Engine
-
-Define governance rules in `policies.yaml`:
-
-```yaml
-policies:
-  - name: require-approval-for-gpt4
-    match:
-      model: "gpt-4*"
-    action: require_approval
-    message: "GPT-4 usage requires human approval"
-
-  - name: block-production-models-at-night
-    match:
-      model: "gpt-4o"
-    schedule:
-      deny: "0 22 * * *-0 6 * * *"
-    action: block
-```
-
-## API Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /health` | Health check |
-| `GET /api/costs` | Cost summaries per agent |
-| `GET /api/budgets` | Budget status and remaining limits |
-| `GET /api/logs` | Query action logs |
-| `GET /api/policies` | List active policies |
-| `POST /v1/openai/...` | Proxied OpenAI requests |
-| `POST /v1/anthropic/...` | Proxied Anthropic requests |
-
-## Architecture
-
-```
-┌─────────────┐     ┌──────────────────────────────────┐     ┌─────────────┐
-│   Agent A    │────▶│          Govyn Proxy             │────▶│   OpenAI    │
-│  (no key)    │     │                                  │     │   API       │
-└─────────────┘     │  ┌──────────┐  ┌──────────────┐  │     └─────────────┘
-                    │  │ Policy   │  │ Budget       │  │
-┌─────────────┐     │  │ Engine   │  │ Enforcer     │  │     ┌─────────────┐
-│   Agent B    │────▶│  └──────────┘  └──────────────┘  │────▶│  Anthropic  │
-│  (no key)    │     │  ┌──────────┐  ┌──────────────┐  │     │   API       │
-└─────────────┘     │  │ Loop     │  │ Action       │  │     └─────────────┘
-                    │  │ Detector │  │ Logger       │  │
-┌─────────────┐     │  └──────────┘  └──────────────┘  │
-│   Agent C    │────▶│                                  │
-│  (no key)    │     │  Real API keys live here only    │
-└─────────────┘     └──────────────────────────────────┘
-```
-
-Agents never hold real API keys. The proxy is the only path to the real APIs.
-
-## Project Structure
-
-```
-govyn/
-├── src/              # Proxy server (TypeScript)
-├── python-sdk/       # Python SDK (govynai package)
-├── configs/          # Example configurations
-├── templates/        # Init wizard templates
-├── tests/            # Proxy test suite
-└── docs/             # Documentation
-```
+TypeScript (strict), Node.js, PostgreSQL (Neon), Prisma, Cloudflare Workers/KV/Vectorize/R2/Workers AI, multi-provider LLM integration.
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on submitting pull requests, reporting issues, and development setup.
+Contributions are welcome. The core architectural principle is non-negotiable: **agents never hold real API keys**. Everything else is open for improvement.
+
+Areas where contributions are especially valuable:
+
+- Additional LLM provider support
+- Policy engine extensions (new rule types, evaluation strategies)
+- Dashboard and observability improvements
+- Documentation and examples
+
+## Further Reading
+
+**Architecture & Philosophy**
+- [AI Agents Need Governance, Not Guardrails](https://marklaursen.com/blog/ai-agents-need-governance-not-guardrails) — the full analysis of why SDK wrappers fail and proxy-based governance works
+- [Proxy vs SDK: Why Architecture Matters](https://govynai.com/blog/proxy-vs-sdk-ai-agent-governance) — comparative analysis of both approaches
+
+**Real-World Cases**
+- [How Replit's Database Deletion Could Have Been Prevented in 3 Lines of YAML](https://govynai.com/blog/replit-database-deletion-prevention) — policy-based governance for destructive actions
+- [Your OpenClaw Agent Runs at 3am. What Stops It?](https://govynai.com/blog/openclaw-agent-governance) — loop detection and autonomous execution governance
+- [We Cut Our AI API Bill by 73%](https://govynai.com/blog/cut-ai-api-costs-without-code-changes) — smart model routing in production
+
+**Security**
+- [Defense in Depth: SSRF, DNS Rebinding, and Injection Protection](https://govynai.com/blog/ssrf-injection-defense-ai-proxy) — six security hardening layers
+- [Why Shared Secrets Are the Biggest Risk in Multi-Tenant AI](https://govynai.com/blog/multi-tenant-security-shared-secrets) — per-org encryption and isolation
+- [Tamper-Resistant AI Response Caching](https://govynai.com/blog/tamper-resistant-ai-caching) — preventing cache poisoning
+- [Detecting Token Count Manipulation](https://govynai.com/blog/detecting-token-count-manipulation) — independent BPE verification for billing integrity
+
+**Commercial**
+- [Govyn Cloud](https://govynai.com) — managed SaaS platform
+
+## Related Projects
+
+- **[Maestro](https://github.com/mbanderas/maestro)** — Research-grounded multi-agent orchestrator for AI coding agents. Maestro coordinates your agents; Govyn governs them. They are designed to work together.
+
+## Community
+
+Questions, bug reports, or governance use cases to share? [Open a discussion](https://github.com/govynAI/govyn/discussions) or [file an issue](https://github.com/govynAI/govyn/issues).
 
 ## License
 
-[MIT](./LICENSE) — Copyright (c) 2026 GovynAI
+MIT

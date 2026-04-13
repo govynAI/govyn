@@ -1,6 +1,13 @@
 <p align="center">
-  <strong>Govyn</strong><br>
-  Open-source AI agent governance proxy
+  <a href="https://govynai.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="dashboard/src/assets/branding/govyn-wordmark-white.png">
+      <source media="(prefers-color-scheme: light)" srcset="dashboard/src/assets/branding/govyn-wordmark-black.png">
+      <img alt="Govyn" src="dashboard/src/assets/branding/govyn-wordmark-black.png" width="280">
+    </picture>
+  </a>
+  <br>
+  <em>Open-source AI agent governance proxy</em>
 </p>
 
 <p align="center">
@@ -27,18 +34,13 @@ SDK-based governance is enforced by convention, not architecture. It works only 
 
 ## How Govyn Works
 
-```
-  Your Agent                    Govyn Proxy                   LLM Provider
-  +--------+                   +-------------+                +-----------+
-  |        |  proxy URL        |             |  real API key  |           |
-  |  Agent +------------------>+  1. Auth    +--------------->+  OpenAI   |
-  |        |  (no real key)    |  2. Policy  |                |  Anthropic|
-  |        |                   |  3. Budget  |  response      |  Google   |
-  |        |<------------------+  4. Loop    +<---------------+  Mistral  |
-  |        |  response         |  5. Route   |                |           |
-  +--------+                   |  6. Log     |                +-----------+
-                               +-------------+
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/architecture-light.svg">
+    <img alt="Govyn Architecture — Agent sends requests to proxy, proxy enforces governance and forwards to LLM providers" src="docs/assets/architecture-light.svg" width="100%">
+  </picture>
+</p>
 
 1. **Agent sends request** — standard API call to the proxy URL. No knowledge of the real API key.
 2. **Policy evaluation** — YAML-defined rules checked in-memory. Model restrictions, content filters, human approval queues.

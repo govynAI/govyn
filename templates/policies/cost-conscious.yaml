@@ -21,8 +21,8 @@ policies:
     enabled: true
     scope: global
     model_aliases:
-      cheap: "claude-haiku-4-20250514"
-      standard: "claude-sonnet-4-20250514"
+      cheap: "claude-haiku-4-5"
+      standard: "claude-sonnet-4-6"
     rules:
       # Route tool calls to standard (needs reliability)
       - when:

@@ -62,6 +62,14 @@ describe('getDefaultPricing', () => {
       'claude-sonnet-4-20250514',
       'claude-haiku-3-5-20241022',
       'claude-opus-4-20250514',
+      'claude-haiku-4-5',
+      'claude-sonnet-4-6',
+      'claude-opus-4-8',
+      'claude-fable-5',
+      'gpt-5.5',
+      'gpt-5.4',
+      'gpt-5.4-mini',
+      'gpt-5.4-nano',
     ];
 
     for (const model of expectedModels) {
@@ -76,6 +84,48 @@ describe('getDefaultPricing', () => {
     table1.delete('gpt-4o');
 
     expect(table2.has('gpt-4o')).toBe(true);
+  });
+
+  it('includes all current-gen models with priced entries', () => {
+    const table = getDefaultPricing();
+
+    const currentGenModels: Array<[string, number, number]> = [
+      ['claude-opus-4-8', 5.00, 25.00],
+      ['claude-sonnet-4-6', 3.00, 15.00],
+      ['claude-haiku-4-5', 1.00, 5.00],
+      ['claude-fable-5', 10.00, 50.00],
+      ['gpt-5.5', 5.00, 30.00],
+      ['gpt-5.4', 2.50, 15.00],
+      ['gpt-5.4-mini', 0.75, 4.50],
+      ['gpt-5.4-nano', 0.20, 1.25],
+    ];
+
+    for (const [model, expectedInput, expectedOutput] of currentGenModels) {
+      const pricing = table.get(model);
+      expect(pricing, `Expected pricing table to include "${model}"`).not.toBeUndefined();
+      expect(pricing!.inputPricePerMillion).toBe(expectedInput);
+      expect(pricing!.outputPricePerMillion).toBe(expectedOutput);
+    }
+  });
+
+  it('includes all smart-router alias targets in the default pricing table', () => {
+    const table = getDefaultPricing();
+
+    const smartRouterAliasTargets = [
+      'claude-haiku-4-5',
+      'claude-sonnet-4-6',
+      'claude-opus-4-8',
+      'gpt-5.4-nano',
+      'gpt-5.4-mini',
+      'gpt-5.5',
+    ];
+
+    for (const model of smartRouterAliasTargets) {
+      expect(
+        table.has(model),
+        `Smart-router alias target "${model}" must exist in the default pricing table`
+      ).toBe(true);
+    }
   });
 });
 

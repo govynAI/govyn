@@ -5,7 +5,7 @@
  * CostAggregator. Tests cover filtering, method validation, and response shape.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import * as http from 'node:http';
 import { CostAggregator } from '../src/cost-aggregator.js';
 import { handleCostApi } from '../src/cost-api.js';
@@ -265,30 +265,39 @@ describe('handleCostApi', () => {
   });
 
   it('GET /api/costs/timeseries returns bucketed spend history with gap filling', async () => {
-    const now = Date.now();
-    aggregator.recordCost(makeRecord({
-      agentId: 'research-agent',
-      totalCost: 1.25,
-      timestamp: now - 2 * 60 * 60 * 1000,
-    }));
-    aggregator.recordCost(makeRecord({
-      agentId: 'sales-bot',
-      totalCost: 0.75,
-      timestamp: now - 60 * 60 * 1000,
-    }));
+    // Pin the clock to 15:00 UTC so "today" always has many elapsed hours and
+    // now-1h / now-2h both fall well within the same day. Faking only Date
+    // avoids breaking async I/O (setTimeout / setInterval stay real).
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-15T15:00:00Z'));
+    try {
+      const now = Date.now();
+      aggregator.recordCost(makeRecord({
+        agentId: 'research-agent',
+        totalCost: 1.25,
+        timestamp: now - 2 * 60 * 60 * 1000,
+      }));
+      aggregator.recordCost(makeRecord({
+        agentId: 'sales-bot',
+        totalCost: 0.75,
+        timestamp: now - 60 * 60 * 1000,
+      }));
 
-    const res = await makeRequest(server, '/api/costs/timeseries?period=today');
-    expect(res.statusCode).toBe(200);
+      const res = await makeRequest(server, '/api/costs/timeseries?period=today');
+      expect(res.statusCode).toBe(200);
 
-    const data = res.json as Record<string, unknown>;
-    expect(data['bucket']).toBe('hour');
-    expect(Array.isArray(data['points'])).toBe(true);
+      const data = res.json as Record<string, unknown>;
+      expect(data['bucket']).toBe('hour');
+      expect(Array.isArray(data['points'])).toBe(true);
 
-    const points = data['points'] as Array<{ total: number; agents: Record<string, number> }>;
-    expect(points.length).toBeGreaterThanOrEqual(3);
-    expect(points.some((point) => point.total === 0)).toBe(true);
-    expect(points.some((point) => point.agents['research-agent'] === 1.25)).toBe(true);
-    expect(points.some((point) => point.agents['sales-bot'] === 0.75)).toBe(true);
+      const points = data['points'] as Array<{ total: number; agents: Record<string, number> }>;
+      expect(points.length).toBeGreaterThanOrEqual(3);
+      expect(points.some((point) => point.total === 0)).toBe(true);
+      expect(points.some((point) => point.agents['research-agent'] === 1.25)).toBe(true);
+      expect(points.some((point) => point.agents['sales-bot'] === 0.75)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('GET /api/costs/unknown returns 404', async () => {

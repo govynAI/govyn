@@ -282,7 +282,7 @@ describe('Template evaluation', () => {
         r => r.policyName === 'anthropic-model-routing'
       ) as ModelRouteResult | undefined;
       expect(routeResult).toBeDefined();
-      expect(routeResult?.routeTo).toBe('claude-sonnet-4-20250514');
+      expect(routeResult?.routeTo).toBe('claude-sonnet-4-6');
     });
 
     it('passes through normal Anthropic request (no rule match)', () => {
@@ -317,7 +317,7 @@ describe('Template evaluation', () => {
         r => r.policyName === 'openai-model-routing'
       ) as ModelRouteResult | undefined;
       expect(routeResult).toBeDefined();
-      expect(routeResult?.routeTo).toBe('gpt-4o-mini');
+      expect(routeResult?.routeTo).toBe('gpt-5.4-nano');
     });
   });
 
@@ -366,7 +366,7 @@ describe('Template evaluation', () => {
       expect(routeResult).toBeDefined();
       // With no tool calls and <500 tokens, it won't match tool_calls or >4000 tokens,
       // so it falls through to the unconditional "route_to: cheap" rule
-      expect(routeResult?.routeTo).toBe('claude-haiku-4-20250514');
+      expect(routeResult?.routeTo).toBe('claude-haiku-4-5');
     });
 
     it('denies when over daily budget', () => {

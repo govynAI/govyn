@@ -62,6 +62,14 @@ export function getDefaultPricing(): PricingTable {
     ['claude-sonnet-4-20250514', 3.00, 15.00],
     ['claude-haiku-3-5-20241022', 0.80, 4.00],
     ['claude-opus-4-20250514', 15.00, 75.00],
+    ['claude-haiku-4-5', 1.00, 5.00],
+    ['claude-sonnet-4-6', 3.00, 15.00],
+    ['claude-opus-4-8', 5.00, 25.00],
+    ['claude-fable-5', 10.00, 50.00],
+    ['gpt-5.5', 5.00, 30.00],
+    ['gpt-5.4', 2.50, 15.00],
+    ['gpt-5.4-mini', 0.75, 4.50],
+    ['gpt-5.4-nano', 0.20, 1.25],
   ];
 
   for (const [model, inputPricePerMillion, outputPricePerMillion] of defaults) {
